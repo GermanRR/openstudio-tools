@@ -1,4 +1,4 @@
-# energyplus-tools
+# openstudio-tools
 
 Python **OpenStudio Measures** that add EnergyPlus modelling options and model checks which the OpenStudio Application does not offer, or offers only in part. They were developed at the University of Navarra (School of Architecture) for teaching and research in building energy simulation.
 
@@ -10,8 +10,6 @@ Python **OpenStudio Measures** that add EnergyPlus modelling options and model c
 
 **Tested with:** OpenStudio 3.11.0 (EnergyPlus 25.2.0).
 **Language:** English (arguments, run messages and reports).
-
-> **Note for users of the first versions:** the measures were originally published in Spanish. In the English version the argument IDs have been renamed (for example `metodo` → `method`). Workflows saved with the Spanish versions still store the old argument names: after updating, remove the measures from the workflow, add them again and re-enter their values.
 
 ---
 
