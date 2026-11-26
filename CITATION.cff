@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use these OpenStudio Measures in your research or teaching, please cite them as below."
+type: software
+title: "energyplus-tools: OpenStudio Measures for Building Energy Simulation"
+abstract: >-
+  A collection of Python OpenStudio Measures, tested with OpenStudio 3.11.0 and
+  EnergyPlus 25.2.0, that add modelling options not available in the OpenStudio
+  Application: ground heat transfer methods (Site:GroundTemperature:BuildingSurface,
+  F/C-factor method and Kiva) and heat recovery, economizer and demand-controlled
+  ventilation for ideal loads air systems.
+authors:
+  - family-names: "Ramos Ruiz"
+    given-names: "Germán"
+    affiliation: "Universidad de Navarra, School of Architecture, Department of Building Construction, Services and Structures"
+    orcid: "https://orcid.org/0000-0002-6585-2197"
+version: "1.0.0"
+date-released: 2026-11-26
+repository-code: "https://github.com/GermanRR/energyplus-tools"
+license: Apache-2.0
+keywords:
+  - OpenStudio
+  - OpenStudio Measures
+  - EnergyPlus
+  - Building energy simulation
+  - Ground heat transfer
+  - Kiva
+  - Ideal loads air system
+  - Heat recovery
+# If you later archive a release in Zenodo, add its DOI:
+# doi: "10.5281/zenodo.XXXXXXX"
