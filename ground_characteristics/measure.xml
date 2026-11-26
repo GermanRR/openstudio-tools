@@ -3,18 +3,18 @@
   <schema_version>3.1</schema_version>
   <name>ground_characteristics</name>
   <uid>82be0bf2-ba45-488d-a9c5-a5884840a22b</uid>
-  <version_id>3d6df2ef-f029-481d-861e-1460cf6c290c</version_id>
-  <version_modified>2026-11-26T06:11:09Z</version_modified>
+  <version_id>9c54ba2b-b526-4db4-b690-dcd901c80ac5</version_id>
+  <version_modified>2026-11-26T15:40:03Z</version_modified>
   <xml_checksum>AA51641A</xml_checksum>
   <class_name>GroundCharacteristics</class_name>
   <display_name>Ground_characteristics</display_name>
-  <description>Mejora el cálculo del calor que el edificio intercambia con el terreno. Por defecto EnergyPlus supone 18 ºC constantes bajo el edificio todo el año. Esta measure permite elegir entre temperaturas mensuales propias, el método F/C-factor (con las temperaturas del clima a 0,5 m o propias) o Kiva (cálculo 2D del terreno con aislamiento perimetral), sin editar el IDF.</description>
-  <modeler_description>Actúa sobre las BuildingSurface:Detailed con condición de contorno de terreno (Ground, GroundFCfactorMethod, Foundation o preprocesadores). Perímetro expuesto de cada solera: suma de sus lados que no coinciden con lados de otra solera en contacto con el terreno (coordenadas absolutas). GROUND: condición Ground + Site:GroundTemperature:BuildingSurface. F/C-FACTOR: una Construction:FfactorGroundFloor por solera (área y perímetro expuesto de la geometría; las soleras sin perímetro expuesto pasan a Adiabatic) y una Construction:CfactorUndergroundWall por muro enterrado (altura = extensión vertical; C dado o 1/ΣR de su construcción); condición GroundFCfactorMethod; temperaturas del EPW a 0,5 m (se elimina Site:GroundTemperature:FCfactorMethod) o manuales. KIVA: un Foundation:Kiva (aislamiento perimetral opcional y muro de cimentación de hormigón), Foundation:Kiva:Settings y SurfaceProperty:ExposedFoundationPerimeter (TotalExposedPerimeter calculado); los muros enterrados de las zonas con solera Kiva también pasan a Foundation; las capas Material:NoMass o AirGap se sustituyen por una capa equivalente con masa e igual resistencia. Las superficies con fuente interna (ConstructionProperty:InternalHeatSource) no admiten F/C-factor ni Kiva y quedan como Ground. Los vértices de los muros F/C o Kiva se rotan para empezar en la esquina superior izquierda (EnergyPlus calcula así su altura). Shallow/Deep solo los usan intercambiadores enterrados.</modeler_description>
+  <description>Improves the calculation of the heat exchanged between the building and the ground. By default, EnergyPlus assumes a constant 18 °C under the building all year round. This measure lets you choose between your own monthly temperatures, the F/C-factor method (with the weather-file temperatures at 0.5 m or your own) and Kiva (2D ground calculation with perimeter insulation), without editing the IDF.</description>
+  <modeler_description>Acts on the BuildingSurface:Detailed objects with a ground boundary condition (Ground, GroundFCfactorMethod, Foundation or preprocessors). Exposed perimeter of each slab: sum of its edges that do not coincide with edges of another ground-contact slab (absolute coordinates). GROUND: Ground boundary condition + Site:GroundTemperature:BuildingSurface. F/C-FACTOR: one Construction:FfactorGroundFloor per slab (area and exposed perimeter from the geometry; slabs without exposed perimeter become Adiabatic) and one Construction:CfactorUndergroundWall per below-grade wall (height = vertical extent; C given or 1/ΣR of its construction); GroundFCfactorMethod boundary condition; weather-file temperatures at 0.5 m (Site:GroundTemperature:FCfactorMethod is removed) or manual ones. KIVA: one Foundation:Kiva (optional perimeter insulation and concrete foundation wall), Foundation:Kiva:Settings and SurfaceProperty:ExposedFoundationPerimeter (computed TotalExposedPerimeter); below-grade walls of zones with a Kiva slab also become Foundation; Material:NoMass or AirGap layers are replaced by an equivalent massive layer with the same resistance. Surfaces with an internal source (ConstructionProperty:InternalHeatSource) cannot use F/C-factor or Kiva and are kept as Ground. The vertices of F/C and Kiva walls are rotated to start at the upper-left corner (this is how EnergyPlus computes their height). Shallow/Deep are used only by ground heat exchangers.</modeler_description>
   <arguments>
     <argument>
-      <name>metodo</name>
-      <display_name>MÉTODO para el contacto con el terreno</display_name>
-      <description>Solo se usan los parámetros del método elegido (los demás se ignoran).</description>
+      <name>method</name>
+      <display_name>GROUND HEAT TRANSFER METHOD</display_name>
+      <description>Only the arguments of the selected method are used (the rest are ignored).</description>
       <type>Choice</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -22,31 +22,31 @@
       <choices>
         <choice>
           <value>Ground</value>
-          <display_name>Ground: temperaturas mensuales bajo el edificio (BuildingSurface)</display_name>
+          <display_name>Ground: monthly temperatures under the building (BuildingSurface)</display_name>
         </choice>
         <choice>
           <value>FCfactor</value>
-          <display_name>F/C-factor: soleras F-factor y muros C-factor (FCfactorMethod)</display_name>
+          <display_name>F/C-factor: F-factor slabs and C-factor walls (FCfactorMethod)</display_name>
         </choice>
         <choice>
           <value>Kiva</value>
-          <display_name>Kiva: cálculo 2D del terreno (Foundation:Kiva)</display_name>
+          <display_name>Kiva: 2D ground calculation (Foundation:Kiva)</display_name>
         </choice>
       </choices>
     </argument>
     <argument>
-      <name>ground_temperaturas</name>
-      <display_name>[Ground] Temperaturas bajo el edificio [ºC]</display_name>
-      <description>12 valores (ene...dic) separados por comas y con punto decimal; o separados por ';' si usa coma decimal. Guía de EnergyPlus: unos 2 ºC por debajo de la temperatura interior media (edificios comerciales típicos de EE. UU.). No use las del EPW (terreno no perturbado): son demasiado extremas bajo un edificio acondicionado. Con F/C-factor o Kiva, se usan en las superficies que esos métodos no admiten (se avisa).</description>
+      <name>ground_temperatures</name>
+      <display_name>[Ground] Temperatures under the building [°C]</display_name>
+      <description>12 values (Jan...Dec) separated by commas, with a decimal point; or separated by ';' if a decimal comma is used. EnergyPlus guidance: about 2 °C below the average indoor temperature (typical US commercial buildings). Do not use the weather-file (undisturbed ground) values: they are too extreme under a conditioned building. With F/C-factor or Kiva, they are used for the surfaces those methods cannot handle (with a warning).</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>18,18,18,18,18,18,18,18,18,18,18,18</default_value>
     </argument>
     <argument>
-      <name>fc_origen</name>
-      <display_name>[F/C-factor] Origen de las temperaturas del terreno</display_name>
-      <description>EPW: EnergyPlus toma las de la cabecera del clima a 0,5 m (no se escribe el objeto).</description>
+      <name>fc_source</name>
+      <display_name>[F/C-factor] Source of the ground temperatures</display_name>
+      <description>EPW: EnergyPlus takes those of the weather-file header at 0.5 m (the object is not written).</description>
       <type>Choice</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -54,18 +54,18 @@
       <choices>
         <choice>
           <value>EPW</value>
-          <display_name>Del fichero climático (EPW) a 0,5 m de profundidad</display_name>
+          <display_name>From the weather file (EPW) at 0.5 m depth</display_name>
         </choice>
         <choice>
           <value>Manual</value>
-          <display_name>Escritas a mano (12 valores)</display_name>
+          <display_name>Entered manually (12 values)</display_name>
         </choice>
       </choices>
     </argument>
     <argument>
-      <name>fc_temperaturas</name>
-      <display_name>[F/C-factor] Temperaturas manuales [ºC]</display_name>
-      <description>Solo si el origen es «manual». 12 valores (ene...dic) separados por comas y con punto decimal; o separados por ';' si usa coma decimal. Deberían parecerse a la temperatura exterior media mensual con unos 3 meses de retraso.</description>
+      <name>fc_temperatures</name>
+      <display_name>[F/C-factor] Manual temperatures [°C]</display_name>
+      <description>Only when the source is 'Manual'. 12 values (Jan...Dec) separated by commas, with a decimal point; or separated by ';' if a decimal comma is used. They should be similar to the monthly mean outdoor air temperature delayed by about 3 months.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -73,37 +73,37 @@
     </argument>
     <argument>
       <name>fc_f_factor</name>
-      <display_name>[F/C-factor] F-factor de las soleras [W/m·K]</display_name>
-      <description>Pérdida por metro de perímetro expuesto y grado. Solera sin aislar (ASHRAE 90.1, F-0,73 Btu/h·ft·ºF): 1,264 W/m·K. A partir de la transmitancia de la solera del CTE (Us, que ya incluye el terreno): F = Us · A/P (la measure informa de A/P de cada solera).</description>
+      <display_name>[F/C-factor] Slab F-factor [W/m·K]</display_name>
+      <description>Heat loss per metre of exposed perimeter and per degree. Uninsulated slab (ASHRAE 90.1, F-0.73 Btu/h·ft·°F): 1.264 W/m·K. From a slab U-value that already includes the ground (e.g. the Spanish CTE Us): F = U · A/P (the measure reports A/P for each slab).</description>
       <type>Double</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>1.264</default_value>
-      <min_value>0.001000</min_value>
+      <min_value>0.001</min_value>
     </argument>
     <argument>
       <name>fc_c_factor</name>
-      <display_name>[F/C-factor] C-factor de los muros enterrados [W/m²·K] (0 = de su construcción)</display_name>
-      <description>Transmitancia del muro sin películas superficiales ni terreno. 0: se calcula para cada muro con su construcción actual, C = 1/Σ(e/λ). Referencia: muro de bloque de hormigón de 20 cm sin aislar (ASHRAE 90.1, C-1,140 Btu/h·ft²·ºF) = 6,473 W/m²·K.</description>
+      <display_name>[F/C-factor] Below-grade wall C-factor [W/m²·K] (0 = from its construction)</display_name>
+      <description>Wall transmittance without air films or soil. 0: computed for each wall from its current construction, C = 1/Σ(e/λ). Reference: uninsulated 8-in concrete block wall (ASHRAE 90.1, C-1.140 Btu/h·ft²·°F) = 6.473 W/m²·K.</description>
       <type>Double</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0</default_value>
-      <min_value>0.000000</min_value>
+      <min_value>0</min_value>
     </argument>
     <argument>
-      <name>kiva_terreno</name>
-      <display_name>[Kiva] Terreno: conductividad [W/m·K], densidad [kg/m³], calor específico [J/kg·K]</display_name>
-      <description>Valores por defecto de EnergyPlus (suelo genérico).</description>
+      <name>kiva_soil</name>
+      <display_name>[Kiva] Soil: conductivity [W/m·K], density [kg/m³], specific heat [J/kg·K]</display_name>
+      <description>EnergyPlus defaults (generic soil).</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>1.73, 1842, 419</default_value>
     </argument>
     <argument>
-      <name>kiva_contorno_profundo</name>
-      <display_name>[Kiva] Condición en el fondo del dominio</display_name>
-      <description>Autoselect: nivel freático si se conoce; si no, flujo nulo.</description>
+      <name>kiva_deep_ground_boundary</name>
+      <display_name>[Kiva] Deep-ground boundary condition</display_name>
+      <description>Autoselect: water table if known; otherwise zero flux.</description>
       <type>Choice</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -124,92 +124,82 @@
       </choices>
     </argument>
     <argument>
-      <name>kiva_aislante_lambda</name>
-      <display_name>[Kiva] Conductividad del aislante perimetral [W/m·K]</display_name>
-      <description>Para todas las posiciones de aislamiento (densidad 35 kg/m³ y calor específico 1400 J/kg·K).</description>
+      <name>kiva_insulation_conductivity</name>
+      <display_name>[Kiva] Perimeter insulation conductivity [W/m·K]</display_name>
+      <description>For all insulation positions (density 35 kg/m³ and specific heat 1400 J/kg·K).</description>
       <type>Double</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0.034</default_value>
-      <min_value>0.001000</min_value>
+      <min_value>0.001</min_value>
     </argument>
     <argument>
-      <name>kiva_ais_int_horizontal</name>
-      <display_name>[Kiva] Aislamiento interior horizontal: espesor [m], anchura [m]</display_name>
-      <description>Bajo la solera, desde el muro hacia dentro. Espesor 0 = sin este aislamiento.</description>
+      <name>kiva_interior_horizontal_insulation</name>
+      <display_name>[Kiva] Interior horizontal insulation: thickness [m], width [m]</display_name>
+      <description>Under the slab, from the wall inwards. Thickness 0 = no insulation in this position.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0, 0</default_value>
     </argument>
     <argument>
-      <name>kiva_ais_int_vertical</name>
-      <display_name>[Kiva] Aislamiento interior vertical: espesor [m], profundidad [m]</display_name>
-      <description>Por dentro del muro de cimentación, desde su coronación hacia abajo.</description>
+      <name>kiva_interior_vertical_insulation</name>
+      <display_name>[Kiva] Interior vertical insulation: thickness [m], depth [m]</display_name>
+      <description>Inside the foundation wall, from its top downwards.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0, 0</default_value>
     </argument>
     <argument>
-      <name>kiva_ais_ext_horizontal</name>
-      <display_name>[Kiva] Aislamiento exterior horizontal: espesor [m], anchura [m], profundidad [m]</display_name>
-      <description>Enterrado fuera del edificio; anchura desde el muro hacia fuera; profundidad desde la rasante.</description>
+      <name>kiva_exterior_horizontal_insulation</name>
+      <display_name>[Kiva] Exterior horizontal insulation: thickness [m], width [m], depth [m]</display_name>
+      <description>Buried outside the building; width from the wall outwards; depth below grade.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0, 0, 0</default_value>
     </argument>
     <argument>
-      <name>kiva_ais_ext_vertical</name>
-      <display_name>[Kiva] Aislamiento exterior vertical: espesor [m], profundidad [m]</display_name>
-      <description>Por fuera del muro de cimentación, desde su coronación hacia abajo.</description>
+      <name>kiva_exterior_vertical_insulation</name>
+      <display_name>[Kiva] Exterior vertical insulation: thickness [m], depth [m]</display_name>
+      <description>Outside the foundation wall, from its top downwards.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0, 0</default_value>
     </argument>
     <argument>
-      <name>kiva_muro</name>
-      <display_name>[Kiva] Muro de cimentación: altura sobre rasante [m], profundidad bajo la solera [m], espesor [m]</display_name>
-      <description>Coronación del muro sobre el terreno exterior y prolongación del muro por debajo de la solera (por defecto en EnergyPlus: 0,2 y 0). Muro de hormigón (λ 1,95 W/m·K, 2240 kg/m³, 900 J/kg·K); se usa en las soleras sin muros enterrados en su zona.</description>
+      <name>kiva_foundation_wall</name>
+      <display_name>[Kiva] Foundation wall: height above grade [m], depth below slab [m], thickness [m]</display_name>
+      <description>Top of the wall above the outside grade, and extension of the wall below the slab (EnergyPlus defaults: 0.2 and 0). Concrete wall (1.95 W/m·K, 2240 kg/m³, 900 J/kg·K); used for slabs without below-grade walls in their zone.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>0.2, 0, 0.3</default_value>
     </argument>
     <argument>
-      <name>escribir_shallow_deep</name>
-      <display_name>[Shallow/Deep] Escribir también estas temperaturas</display_name>
-      <description>SOLO las usan algunos intercambiadores de calor enterrados. No afectan a soleras ni muros.</description>
+      <name>write_shallow_deep</name>
+      <display_name>[Shallow/Deep] Also write these temperatures</display_name>
+      <description>Used ONLY by some ground heat exchangers. They do not affect floors or walls.</description>
       <type>Boolean</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>false</default_value>
-      <choices>
-        <choice>
-          <value>true</value>
-          <display_name>true</display_name>
-        </choice>
-        <choice>
-          <value>false</value>
-          <display_name>false</display_name>
-        </choice>
-      </choices>
     </argument>
     <argument>
-      <name>shallow_temperaturas</name>
-      <display_name>[Shallow/Deep] Shallow (superficial) [ºC]</display_name>
-      <description>12 valores (ene...dic) separados por comas y con punto decimal; o separados por ';' si usa coma decimal.</description>
+      <name>shallow_temperatures</name>
+      <display_name>[Shallow/Deep] Shallow (surface) [°C]</display_name>
+      <description>12 values (Jan...Dec) separated by commas, with a decimal point; or separated by ';' if a decimal comma is used.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>13,13,13,13,13,13,13,13,13,13,13,13</default_value>
     </argument>
     <argument>
-      <name>deep_temperaturas</name>
-      <display_name>[Shallow/Deep] Deep (3-4 m) [ºC]</display_name>
-      <description>12 valores (ene...dic) separados por comas y con punto decimal; o separados por ';' si usa coma decimal.</description>
+      <name>deep_temperatures</name>
+      <display_name>[Shallow/Deep] Deep (3-4 m) [°C]</display_name>
+      <description>12 values (Jan...Dec) separated by commas, with a decimal point; or separated by ';' if a decimal comma is used.</description>
       <type>String</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -260,13 +250,13 @@
       <filename>measure.py</filename>
       <filetype>py</filetype>
       <usage_type>script</usage_type>
-      <checksum>47161B9D</checksum>
+      <checksum>3C005504</checksum>
     </file>
     <file>
       <filename>test_ground_characteristics.py</filename>
       <filetype>py</filetype>
       <usage_type>test</usage_type>
-      <checksum>9C4357D7</checksum>
+      <checksum>EFD3529B</checksum>
     </file>
   </files>
 </measure>
