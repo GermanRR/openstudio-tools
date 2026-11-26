@@ -1,4 +1,4 @@
-# energyplus-tools
+# openstudio-tools
 
 Python **OpenStudio Measures** that add EnergyPlus modelling options and model checks which the OpenStudio Application does not offer, or offers only in part. They were developed at the University of Navarra (School of Architecture) for teaching and research in building energy simulation.
 
