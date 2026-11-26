@@ -1,4 +1,4 @@
-# openstudio-tools
+# energyplus-tools
 
 Python **OpenStudio Measures** that add EnergyPlus modelling options and model checks which the OpenStudio Application does not offer, or offers only in part. They were developed at the University of Navarra (School of Architecture) for teaching and research in building energy simulation.
 
@@ -9,7 +9,9 @@ Python **OpenStudio Measures** that add EnergyPlus modelling options and model c
 | [`transmittance_info`](transmittance_info/) | Model Measure (*Apply Measure Now*) | U-values of the constructions and glazing applied in the model, calculated before simulating and shown in an HTML report |
 
 **Tested with:** OpenStudio 3.11.0 (EnergyPlus 25.2.0).
-**Language:** argument names, descriptions and run messages are currently in **Spanish**.
+**Language:** English (arguments, run messages and reports).
+
+> **Note for users of the first versions:** the measures were originally published in Spanish. In the English version the argument IDs have been renamed (for example `metodo` → `method`). Workflows saved with the Spanish versions still store the old argument names: after updating, remove the measures from the workflow, add them again and re-enter their values.
 
 ---
 
@@ -42,7 +44,7 @@ This measure lets the user choose the ground model from a drop-down list and com
 
 ### What it does
 
-The **`metodo`** drop-down selects one of three methods:
+The **`method`** drop-down selects one of three methods:
 
 - **Ground** (`Site:GroundTemperature:BuildingSurface`): every ground-contact surface uses 12 monthly temperatures entered in the measure.
 - **F/C-factor** (`Site:GroundTemperature:FCfactorMethod`):
@@ -76,22 +78,22 @@ Common to all methods:
 
 | Argument | Default | Description |
 |---|---|---|
-| `metodo` | `FCfactor` | `Ground`, `FCfactor` or `Kiva`. Only the arguments of the selected method are used. |
-| `ground_temperaturas` | 18 ×12 | Monthly temperatures for `Ground` (°C). Also used for any surface that the F/C-factor or Kiva method cannot handle. |
-| `fc_origen` | `EPW` | Source of the F/C-factor ground temperatures: weather file at 0.5 m, or `Manual`. |
-| `fc_temperaturas` | 15 ×12 | Manual F/C-factor ground temperatures (°C). |
+| `method` | `FCfactor` | `Ground`, `FCfactor` or `Kiva`. Only the arguments of the selected method are used. |
+| `ground_temperatures` | 18 ×12 | Monthly temperatures for `Ground` (°C). Also used for any surface that the F/C-factor or Kiva method cannot handle. |
+| `fc_source` | `EPW` | Source of the F/C-factor ground temperatures: weather file at 0.5 m, or `Manual`. |
+| `fc_temperatures` | 15 ×12 | Manual F/C-factor ground temperatures (°C). |
 | `fc_f_factor` | 1.264 W/m·K | Slab F-factor. The default is an uninsulated slab (ASHRAE 90.1, F-0.73). From a slab U-value that already includes the ground effect: F = U·A/P. |
 | `fc_c_factor` | 0 | Below-grade wall C-factor in W/m²·K, without air films or soil. 0 means it is calculated from each wall's construction. |
-| `kiva_terreno` | 1.73, 1842, 419 | Soil conductivity (W/m·K), density (kg/m³) and specific heat (J/kg·K). The defaults are those of EnergyPlus. |
-| `kiva_contorno_profundo` | `Autoselect` | Deep-ground boundary: `Autoselect`, `ZeroFlux` or `GroundWater`. |
-| `kiva_aislante_lambda` | 0.034 W/m·K | Conductivity of the perimeter insulation. |
-| `kiva_ais_int_horizontal` | 0, 0 | Interior horizontal insulation: thickness, width (m). A thickness of 0 means no insulation. |
-| `kiva_ais_int_vertical` | 0, 0 | Interior vertical insulation: thickness, depth (m). |
-| `kiva_ais_ext_horizontal` | 0, 0, 0 | Exterior horizontal insulation: thickness, width, depth (m). |
-| `kiva_ais_ext_vertical` | 0, 0 | Exterior vertical insulation: thickness, depth (m). |
-| `kiva_muro` | 0.2, 0, 0.3 | Foundation wall: height above grade, depth below the slab, thickness (m). |
-| `escribir_shallow_deep` | false | Also write `Site:GroundTemperature:Shallow` and `:Deep`. |
-| `shallow_temperaturas`, `deep_temperaturas` | 13 ×12, 16 ×12 | Monthly values for those objects. |
+| `kiva_soil` | 1.73, 1842, 419 | Soil conductivity (W/m·K), density (kg/m³) and specific heat (J/kg·K). The defaults are those of EnergyPlus. |
+| `kiva_deep_ground_boundary` | `Autoselect` | Deep-ground boundary: `Autoselect`, `ZeroFlux` or `GroundWater`. |
+| `kiva_insulation_conductivity` | 0.034 W/m·K | Conductivity of the perimeter insulation. |
+| `kiva_interior_horizontal_insulation` | 0, 0 | Interior horizontal insulation: thickness, width (m). A thickness of 0 means no insulation. |
+| `kiva_interior_vertical_insulation` | 0, 0 | Interior vertical insulation: thickness, depth (m). |
+| `kiva_exterior_horizontal_insulation` | 0, 0, 0 | Exterior horizontal insulation: thickness, width, depth (m). |
+| `kiva_exterior_vertical_insulation` | 0, 0 | Exterior vertical insulation: thickness, depth (m). |
+| `kiva_foundation_wall` | 0.2, 0, 0.3 | Foundation wall: height above grade, depth below the slab, thickness (m). |
+| `write_shallow_deep` | false | Also write `Site:GroundTemperature:Shallow` and `:Deep`. |
+| `shallow_temperatures`, `deep_temperatures` | 13 ×12, 16 ×12 | Monthly values for those objects. |
 
 Monthly values are entered as 12 comma-separated numbers with a decimal point (`2.5,3,...`), or separated by semicolons when a decimal comma is used (`2,5;3;...`).
 
@@ -113,7 +115,7 @@ With a constant 18 °C, the slab even supplies heat to the zone in winter and ac
 - Only `BuildingSurface:Detailed` surfaces are modified. The OpenStudio translator always writes this object type.
 - A single `Foundation:Kiva` object is applied to all Kiva slabs, so every slab gets the same insulation and foundation wall.
 - The F-factor does not depend on the slab construction. It must be chosen to represent the actual slab, for example from a national-code U-value through F = U·A/P.
-- Below-grade walls are handled by Kiva only in zones that have a Kiva slab. Other below-grade walls keep the `Ground` boundary condition and the `ground_temperaturas` values.
+- Below-grade walls are handled by Kiva only in zones that have a Kiva slab. Other below-grade walls keep the `Ground` boundary condition and the `ground_temperatures` values.
 - The exposed-perimeter rule assumes that slab edges shared with other ground-contact floors are interior. A slab bordering a crawl space or another non-ground floor at the same level is counted as exposed along that edge.
 
 ### Related work
@@ -184,15 +186,15 @@ Run with **Apply Measure Now**. The measure does not modify the model.
   - **Layered glazing: center-of-glass U as EnergyPlus computes it.** ISO 15099, NFRC winter conditions: 21 °C inside, −18 °C outside, 26 W/m²K outside convection. Air, argon, krypton, xenon, custom gases and gas mixtures are supported. Across 11 tested compositions (single, double and triple glazing, low-e coatings, gas fills and a 90/10 argon-air mixture), the result is within 1 % of the *Glass U-Factor* reported by EnergyPlus 25.2.
   - **Layered glazing: Ug according to UNE-EN 673**, the value declared by glass manufacturers and required by the CTE. It reproduces published manufacturer values to within about 0.01 W/m²K.
 - **Summary table** by element type (façades, roofs, ground floors, partitions, doors, windows), with total area and area-weighted U.
-- **Report:** an HTML file saved to the chosen folder (or to the system temporary folder) and opened in the default web browser. It includes CSV export and a print/PDF button. The main results are also listed in the measure messages.
+- **Report:** an HTML file saved to the chosen folder (or to the system temporary folder) and opened in the default web browser. It includes CSV export in two formats (comma separator with decimal point, or semicolon separator with decimal comma for Excel in locales such as Spanish) and a print/PDF button. The main results are also listed in the measure messages.
 
 ### Arguments
 
 | Argument | Default | Description |
 |---|---|---|
-| `abrir_navegador` | true | Open the report in the web browser when the measure finishes. |
-| `carpeta_salida` | empty | Folder where the report is saved. Empty means the system temporary folder; the path is shown in the measure messages. |
-| `incluir_interiores` | true | Include interior partitions, interior doors and interior windows. |
+| `open_browser` | true | Open the report in the web browser when the measure finishes. |
+| `output_folder` | empty | Folder where the report is saved. Empty means the system temporary folder; the path is shown in the measure messages. |
+| `include_interior` | true | Include interior partitions, interior doors and interior windows. |
 
 ### Limitations
 
