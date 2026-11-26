@@ -1,11 +1,12 @@
 # energyplus-tools
 
-Python **OpenStudio Measures** that add EnergyPlus modelling options which the OpenStudio Application does not offer, or offers only in part. They were developed at the University of Navarra (School of Architecture) for teaching and research in building energy simulation.
+Python **OpenStudio Measures** that add EnergyPlus modelling options and model checks which the OpenStudio Application does not offer, or offers only in part. They were developed at the University of Navarra (School of Architecture) for teaching and research in building energy simulation.
 
 | Measure | Type | What it adds |
 |---|---|---|
 | [`ground_characteristics`](ground_characteristics/) | EnergyPlus Measure | Realistic ground heat transfer: monthly ground temperatures, the F/C-factor method or Kiva, configured from the measure without editing the IDF |
 | [`ideal_loads_all_params`](ideal_loads_all_params/) | EnergyPlus Measure | Heat recovery (sensible/enthalpy), outdoor-air economizer and demand-controlled ventilation for ideal loads air systems |
+| [`transmittance_info`](transmittance_info/) | Model Measure (*Apply Measure Now*) | U-values of the constructions and glazing applied in the model, calculated before simulating and shown in an HTML report |
 
 **Tested with:** OpenStudio 3.11.0 (EnergyPlus 25.2.0).
 **Language:** argument names, descriptions and run messages are currently in **Spanish**.
@@ -15,10 +16,11 @@ Python **OpenStudio Measures** that add EnergyPlus modelling options which the O
 ## Installation and use
 
 1. Copy the measure folder (for example `ground_characteristics/`) into your *My Measures* directory. In the OpenStudio Application, you can check or change it under *Preferences → Change My Measures Directory*.
-2. In the OpenStudio Application, open the **Measures** tab and drag the measure into the **EnergyPlus Measures** section of the workflow.
-3. Set the arguments and run the simulation.
+2. How you run it depends on the measure type:
+   - **EnergyPlus Measures** (`ground_characteristics`, `ideal_loads_all_params`): open the **Measures** tab, drag the measure into the **EnergyPlus Measures** section of the workflow, set the arguments and run the simulation.
+   - **`transmittance_info`**: use *Components & Measures → Apply Measure Now*. It runs immediately on the open model, without a simulation.
 
-These are **EnergyPlus Measures**: they edit the IDF that OpenStudio generates at run time, not the `.osm` model. Their changes therefore do not appear in the OpenStudio Application. To see what each measure did, check the measure messages in the run log or the `in.idf` of the run.
+The EnergyPlus Measures edit the IDF that OpenStudio generates at run time, not the `.osm` model. Their changes therefore do not appear in the OpenStudio Application. To see what each measure did, check the measure messages in the run log or the `in.idf` of the run.
 
 ---
 
@@ -162,18 +164,58 @@ As a result, the effect of a heat recovery unit or free cooling on demand cannot
 
 ---
 
+## Transmittance_info
+
+### Why
+
+DesignBuilder shows the U-value of every construction before a simulation. The OpenStudio Application does not: its SDK can compute a surface U-factor, but the interface does not display it, and the U-value of layered glazing is only known after running EnergyPlus. This measure fills that gap for teaching and for quick checks of a model. It reports U-values with the surface resistances of the Spanish Building Code (CTE) and with the values EnergyPlus reports. Placed side by side, they explain why different tools give different numbers for the same construction.
+
+### What it does
+
+Run with **Apply Measure Now**. The measure does not modify the model.
+
+- **Constructions included.** Only the constructions actually applied in the model: the construction assigned to each surface or sub-surface if it has one, otherwise the one it receives from its default construction set. The **Origin** column says which case applies. Constructions in the library that are not used are ignored.
+- **Opaque constructions:**
+  - **U according to UNE-EN ISO 6946** (CTE DA DB-HE/1): U = 1/(Rsi + Σ e/λ + Rse). The surface resistances depend on the boundary condition and on the direction of heat flow, which is derived from the surface tilt.
+  - **U with ASHRAE air films**, as published in the EnergyPlus *Envelope Summary* report. In tests it matches EnergyPlus 25.2 for walls, roofs, slabs and interior partitions.
+  - **Layer-by-layer composition:** thickness, conductivity and resistance of each material.
+- **Glazing:**
+  - **Simple Glazing System:** the U-factor, SHGC and visible transmittance entered in the object.
+  - **Layered glazing: center-of-glass U as EnergyPlus computes it.** ISO 15099, NFRC winter conditions: 21 °C inside, −18 °C outside, 26 W/m²K outside convection. Air, argon, krypton, xenon, custom gases and gas mixtures are supported. Across 11 tested compositions (single, double and triple glazing, low-e coatings, gas fills and a 90/10 argon-air mixture), the result is within 1 % of the *Glass U-Factor* reported by EnergyPlus 25.2.
+  - **Layered glazing: Ug according to UNE-EN 673**, the value declared by glass manufacturers and required by the CTE. It reproduces published manufacturer values to within about 0.01 W/m²K.
+- **Summary table** by element type (façades, roofs, ground floors, partitions, doors, windows), with total area and area-weighted U.
+- **Report:** an HTML file saved to the chosen folder (or to the system temporary folder) and opened in the default web browser. It includes CSV export and a print/PDF button. The main results are also listed in the measure messages.
+
+### Arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `abrir_navegador` | true | Open the report in the web browser when the measure finishes. |
+| `carpeta_salida` | empty | Folder where the report is saved. Empty means the system temporary folder; the path is shown in the measure messages. |
+| `incluir_interiores` | true | Include interior partitions, interior doors and interior windows. |
+
+### Limitations
+
+- **Ground-contact elements:** the U-value includes Rsi but not the ground. The CTE Us of slabs and basement walls depends on geometry and insulation and is not computed.
+- **F/C-factor constructions:** reported as their equivalent value.
+- **Glazing U-values** are center-of-glass. Frames and thermal bridges are not included; the report flags windows that have a frame defined.
+- **Not computed:** constructions with shading layers, thermochromic glazing, air boundaries and window data files. They are listed as "not computable".
+- **Interior partitions:** each pair of matched surfaces is counted once. Horizontal partitions show two values, for upward and for downward heat flow.
+
+---
+
 ## Tests
 
 Each measure includes unit tests that run without a simulation:
 
 ```bash
 pip install openstudio==3.11.0 pytest
-pytest ground_characteristics/tests ideal_loads_all_params/tests
+pytest ground_characteristics/tests ideal_loads_all_params/tests transmittance_info/tests
 ```
 
 ## Compatibility with other versions
 
-Both measures read and write EnergyPlus fields **by name**, through the IDD that OpenStudio loads, so they do not depend on field order. They should keep working in later OpenStudio/EnergyPlus versions unless an object, field or output variable is renamed, or the OpenStudio translation changes. The unit tests are the quickest way to check a new version.
+The EnergyPlus Measures read and write EnergyPlus fields **by name**, through the IDD that OpenStudio loads, so they do not depend on field order. `transmittance_info` uses only the OpenStudio model API. They should keep working in later OpenStudio/EnergyPlus versions unless an object, field or output variable is renamed, or the OpenStudio translation changes. The unit tests are the quickest way to check a new version.
 
 ## Citation
 

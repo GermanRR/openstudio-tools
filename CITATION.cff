@@ -6,8 +6,10 @@ abstract: >-
   A collection of Python OpenStudio Measures, tested with OpenStudio 3.11.0 and
   EnergyPlus 25.2.0, that add modelling options not available in the OpenStudio
   Application: ground heat transfer methods (Site:GroundTemperature:BuildingSurface,
-  F/C-factor method and Kiva) and heat recovery, economizer and demand-controlled
-  ventilation for ideal loads air systems.
+  F/C-factor method and Kiva), heat recovery, economizer and demand-controlled
+  ventilation for ideal loads air systems, and a pre-simulation report of the
+  thermal transmittance (U-value) of the constructions and glazing applied in the
+  model (UNE-EN ISO 6946, ISO 15099 as in EnergyPlus, and UNE-EN 673).
 authors:
   - family-names: "Ramos Ruiz"
     given-names: "Germán"
@@ -26,5 +28,7 @@ keywords:
   - Kiva
   - Ideal loads air system
   - Heat recovery
+  - Thermal transmittance
+  - U-value
 # If you later archive a release in Zenodo, add its DOI:
 # doi: "10.5281/zenodo.XXXXXXX"
