@@ -1,4 +1,6 @@
-"""Mejora del contacto con el terreno. EnergyPlusMeasure en Python para OpenStudio 3.11 (EnergyPlus 25.2).
+"""Copyright 2026 Germán Ramos Ruiz y SPDX-License-Identifier: Apache-2.0
+
+Mejora del contacto con el terreno. EnergyPlusMeasure en Python para OpenStudio 3.11 (EnergyPlus 25.2).
 
 Sustituye el valor por defecto de EnergyPlus (18 ºC constantes bajo el edificio) por uno de estos métodos,
 elegidos con un desplegable:
