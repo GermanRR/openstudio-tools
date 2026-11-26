@@ -1,0 +1,108 @@
+<?xml version="1.0"?>
+<measure>
+  <schema_version>3.1</schema_version>
+  <name>transmittance_info</name>
+  <uid>47c89232-80fc-4b9e-a34f-93b055792732</uid>
+  <version_id>f231f057-1549-4043-b82c-4363bd8c00d4</version_id>
+  <version_modified>2026-11-26T15:13:53Z</version_modified>
+  <xml_checksum>2E80787A</xml_checksum>
+  <class_name>TransmittanceInfo</class_name>
+  <display_name>Transmittance_info</display_name>
+  <description>Calcula, sin simular, la transmitancia térmica U de los cerramientos opacos y de los vidrios que están aplicados en el modelo y abre un informe en el navegador. Úsela con «Apply Measure Now» (menú Components &amp; Measures). No modifica el modelo.</description>
+  <modeler_description>Recorre Surfaces y SubSurfaces y toma su construcción efectiva (incluidas las de los Default Construction Sets). Opacos: U = 1/(Rsi + Σe/λ + Rse) con Rsi/Rse de UNE-EN ISO 6946 / DA DB-HE/1 según la inclinación (flujo horizontal si 60º ≤ inclinación ≤ 120º) y la condición de contorno (terreno: Rse = 0, sin terreno; particiones: Rsi a ambos lados); también la U con películas ASHRAE de PlanarSurface::uFactor(). F/C-factor: U equivalente F·P/A y C. Huecos: SimpleGlazing con sus valores; vidrios por capas con la U del centro del vidrio de ISO 15099 en condiciones NFRC de invierno (21/−18 ºC, hc,e = 26 W/m²K, convección interior ISO 15099 con altura 1 m, gases y mezclas con los coeficientes de EnergyPlus) y la Ug de UNE-EN 673. Áreas netas × multiplicador de zona; las particiones emparejadas con la misma construcción se cuentan una vez. El informe HTML se guarda en la carpeta indicada (o en la temporal del sistema) y se abre con el navegador predeterminado.</modeler_description>
+  <arguments>
+    <argument>
+      <name>abrir_navegador</name>
+      <display_name>Abrir el informe en el navegador al terminar</display_name>
+      <type>Boolean</type>
+      <required>true</required>
+      <model_dependent>false</model_dependent>
+      <default_value>true</default_value>
+    </argument>
+    <argument>
+      <name>carpeta_salida</name>
+      <display_name>Carpeta donde guardar el informe (vacío = carpeta temporal del sistema)</display_name>
+      <description>Por ejemplo C:\Users\nombre\Documents. La ruta del informe aparece en los mensajes.</description>
+      <type>String</type>
+      <required>false</required>
+      <model_dependent>false</model_dependent>
+    </argument>
+    <argument>
+      <name>incluir_interiores</name>
+      <display_name>Incluir particiones y huecos interiores</display_name>
+      <type>Boolean</type>
+      <required>true</required>
+      <model_dependent>false</model_dependent>
+      <default_value>true</default_value>
+    </argument>
+  </arguments>
+  <outputs />
+  <provenances />
+  <tags>
+    <tag>Envelope.Form</tag>
+  </tags>
+  <attributes>
+    <attribute>
+      <name>Measure Type</name>
+      <value>ModelMeasure</value>
+      <datatype>string</datatype>
+    </attribute>
+    <attribute>
+      <name>Measure Language</name>
+      <value>Python</value>
+      <datatype>string</datatype>
+    </attribute>
+    <attribute>
+      <name>Intended Software Tool</name>
+      <value>Apply Measure Now</value>
+      <datatype>string</datatype>
+    </attribute>
+    <attribute>
+      <name>Intended Software Tool</name>
+      <value>OpenStudio Application</value>
+      <datatype>string</datatype>
+    </attribute>
+    <attribute>
+      <name>Intended Software Tool</name>
+      <value>Parametric Analysis Tool</value>
+      <datatype>string</datatype>
+    </attribute>
+  </attributes>
+  <files>
+    <file>
+      <filename>LICENSE.md</filename>
+      <filetype>md</filetype>
+      <usage_type>license</usage_type>
+      <checksum>CD7F5672</checksum>
+    </file>
+    <file>
+      <filename>.gitkeep</filename>
+      <filetype>gitkeep</filetype>
+      <usage_type>doc</usage_type>
+      <checksum>00000000</checksum>
+    </file>
+    <file>
+      <version>
+        <software_program>OpenStudio</software_program>
+        <identifier>3.11.0</identifier>
+        <min_compatible>3.11.0</min_compatible>
+      </version>
+      <filename>measure.py</filename>
+      <filetype>py</filetype>
+      <usage_type>script</usage_type>
+      <checksum>212A9EA5</checksum>
+    </file>
+    <file>
+      <filename>example_model.osm</filename>
+      <filetype>osm</filetype>
+      <usage_type>test</usage_type>
+      <checksum>D6BD40D0</checksum>
+    </file>
+    <file>
+      <filename>test_transmittance_info.py</filename>
+      <filetype>py</filetype>
+      <usage_type>test</usage_type>
+      <checksum>0A790CFC</checksum>
+    </file>
+  </files>
+</measure>
