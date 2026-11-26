@@ -1,12 +1,12 @@
-"""Copyright 2026 Germán Ramos Ruiz y SPDX-License-Identifier: Apache-2.0.
+"""Ideal_Loads_All_Params: EnergyPlus Measure (Python) for OpenStudio 3.11.
 
-Measure de EnergyPlus (Python) para OpenStudio 3.11.
+Copyright (c) 2026 Germán Ramos Ruiz. SPDX-License-Identifier: Apache-2.0
 
-Edita los sistemas de cargas ideales que escribe OpenStudio al traducir el modelo
-para activar el recuperador de calor, el economizador y la ventilación controlada
-por ocupación, sin tener que modelar una instalación real.
+Edits the ideal loads air systems that OpenStudio writes when it translates the model, to enable
+heat recovery, an outdoor air economizer and demand-controlled ventilation without modelling a
+real HVAC system.
 
-Probada con OpenStudio 3.11.0 (EnergyPlus 25.2.0).
+Tested with OpenStudio 3.11.0 (EnergyPlus 25.2.0).
 
 # see the URL below for information on how to write OpenStudio measures
 # http://nrel.github.io/OpenStudio-user-documentation/reference/measure_writing_guide/
@@ -15,19 +15,19 @@ Probada con OpenStudio 3.11.0 (EnergyPlus 25.2.0).
 import openstudio
 
 # ---------------------------------------------------------------------------
-# Constantes
+# Constants
 # ---------------------------------------------------------------------------
 
-# Con la casilla "Ideal Air Loads" (pestaña Thermal Zones), OpenStudio escribe este objeto.
-# EnergyPlus lo convierte después (ExpandObjects) en un ZoneHVAC:IdealLoadsAirSystem.
+# With the "Ideal Air Loads" checkbox (Thermal Zones tab), OpenStudio writes this object.
+# EnergyPlus then converts it (ExpandObjects) into a ZoneHVAC:IdealLoadsAirSystem.
 TEMPLATE_TYPE = "HVACTemplate:Zone:IdealLoadsAirSystem"
-# Si el equipo se ha añadido a la zona desde la librería (pestaña HVAC), se escribe este otro.
+# If the equipment was added to the zone from the library (HVAC tab), this object is written instead.
 ZONEHVAC_TYPE = "ZoneHVAC:IdealLoadsAirSystem"
 
-# Con la casilla "Ideal Air Loads", OpenStudio NO conecta el DesignSpecification:OutdoorAir
-# a las cargas ideales: crea un ZoneVentilation:DesignFlowRate por cada componente no nulo
-# del DSOA, con estos nombres ("<zona> Ventilation per Person", etc.).
-# Comprobado con el ForwardTranslator de OpenStudio 3.11.0.
+# With the "Ideal Air Loads" checkbox, OpenStudio does NOT connect the DesignSpecification:OutdoorAir
+# to the ideal loads system: it creates one ZoneVentilation:DesignFlowRate for each non-zero
+# component of the DSOA, with these names ("<zone> Ventilation per Person", etc.).
+# Checked with the OpenStudio 3.11.0 ForwardTranslator.
 OS_VENTILATION_SUFFIXES = (
     " Ventilation per Person",
     " Ventilation per Floor Area",
@@ -35,7 +35,7 @@ OS_VENTILATION_SUFFIXES = (
     " Ventilation Air Changes per Hour",
 )
 
-# Variables de salida útiles para explicar el recuperador (nombres del I/O Reference).
+# Output variables that help to explain the heat recovery (names from the I/O Reference).
 OUTPUT_VARIABLES = (
     "Zone Ideal Loads Supply Air Total Heating Energy",
     "Zone Ideal Loads Supply Air Total Cooling Energy",
@@ -49,7 +49,7 @@ OUTPUT_VARIABLES = (
     "Zone Ideal Loads Mixed Air Temperature",
 )
 
-# Nombres de campo del IDD de EnergyPlus (iguales en los dos objetos salvo "Outdoor Air Method").
+# EnergyPlus IDD field names (the same in both objects except "Outdoor Air Method").
 F_DSOA = "Design Specification Outdoor Air Object Name"
 F_DCV = "Demand Controlled Ventilation Type"
 F_ECON = "Outdoor Air Economizer Type"
@@ -58,12 +58,12 @@ F_SENS = "Sensible Heat Recovery Effectiveness"
 F_LAT = "Latent Heat Recovery Effectiveness"
 F_COOL_LIMIT = "Cooling Limit"
 F_MAX_COOL_FLOW = "Maximum Cooling Air Flow Rate"
-F_OA_METHOD = "Outdoor Air Method"  # solo en el HVACTemplate
+F_OA_METHOD = "Outdoor Air Method"  # HVACTemplate only
 
 
 # ---------------------------------------------------------------------------
-# Funciones auxiliares para leer y escribir campos por NOMBRE (no por índice),
-# así la measure no se rompe si cambia el orden de campos entre versiones de EnergyPlus.
+# Helpers to read and write fields by NAME (not by index), so the measure does not break
+# if the field order changes between EnergyPlus versions.
 # ---------------------------------------------------------------------------
 
 
@@ -74,12 +74,12 @@ def _iot(type_name):
 def _field_index(obj, field_name):
     opt = obj.iddObject().getFieldIndex(field_name)
     if not opt.is_initialized():
-        raise KeyError(f"El objeto {obj.iddObject().name()} no tiene el campo '{field_name}'")
+        raise KeyError(f"Object {obj.iddObject().name()} has no field '{field_name}'")
     return opt.get()
 
 
 def _get_idx(obj, idx):
-    """Valor de texto del campo idx ('' si está vacío o no existe)."""
+    """Text value of field idx ('' if empty or missing)."""
     if idx >= obj.numFields():
         return ""
     val = obj.getString(idx)
@@ -91,7 +91,7 @@ def _get(obj, field_name):
 
 
 def _set(obj, field_name, value):
-    """Escribe el campo (si el objeto viene truncado, OpenStudio lo alarga)."""
+    """Writes the field (OpenStudio extends the object if it is truncated)."""
     return obj.setString(_field_index(obj, field_name), str(value))
 
 
@@ -101,7 +101,7 @@ def _find(workspace, type_name, name):
 
 
 def _dsoa_has_flow(workspace, dsoa_name):
-    """True si el DSOA (o la DSOA:SpaceList) define algún caudal de aire exterior > 0."""
+    """True if the DSOA (or the DSOA:SpaceList) defines any outdoor air flow > 0."""
     if not dsoa_name:
         return False
     dsoa = _find(workspace, "DesignSpecification:OutdoorAir", dsoa_name)
@@ -113,13 +113,13 @@ def _dsoa_has_flow(workspace, dsoa_name):
             "Outdoor Air Flow Air Changes per Hour",
         )
         for f in fields:
-            v = dsoa.getDouble(_field_index(dsoa, f), True)  # True: usa el valor por defecto del IDD si está vacío
+            v = dsoa.getDouble(_field_index(dsoa, f), True)  # True: use the IDD default if empty
             if v.is_initialized() and v.get() > 0:
                 return True
         return False
     space_list = _find(workspace, "DesignSpecification:OutdoorAir:SpaceList", dsoa_name)
     if space_list is not None:
-        # Campos: Name, (Space Name i, DSOA Name i), ...
+        # Fields: Name, (Space Name i, DSOA Name i), ...
         for i in range(2, space_list.numFields(), 2):
             if _dsoa_has_flow(workspace, _get_idx(space_list, i)):
                 return True
@@ -127,7 +127,7 @@ def _dsoa_has_flow(workspace, dsoa_name):
 
 
 def _zone_dsoa_map(workspace):
-    """Zona -> DSOA que OpenStudio asigna a esa zona (lo escribe en Sizing:Zone)."""
+    """Zone -> DSOA that OpenStudio assigns to the zone (written in Sizing:Zone)."""
     result = {}
     for sz in workspace.getObjectsByType(_iot("Sizing:Zone")):
         zone = _get_idx(sz, 0)
@@ -138,7 +138,7 @@ def _zone_dsoa_map(workspace):
 
 
 def _zonehvac_zone_map(workspace):
-    """Nombre del ZoneHVAC:IdealLoadsAirSystem -> zona que sirve (vía EquipmentList/Connections)."""
+    """ZoneHVAC:IdealLoadsAirSystem name -> zone it serves (through EquipmentList/Connections)."""
     eqlist_to_zone = {}
     for ec in workspace.getObjectsByType(_iot("ZoneHVAC:EquipmentConnections")):
         eqlist_to_zone[_get_idx(ec, 1).upper()] = _get_idx(ec, 0)
@@ -152,15 +152,15 @@ def _zonehvac_zone_map(workspace):
 
 
 def _remove_os_ventilation(workspace, zone_name):
-    """Elimina los ZoneVentilation:DesignFlowRate que OpenStudio generó a partir del DSOA.
+    """Removes the ZoneVentilation:DesignFlowRate objects that OpenStudio generated from the DSOA.
 
-    Solo borra los que tienen exactamente los nombres que pone OpenStudio; los que haya
-    creado el usuario (p. ej. ventilación natural) se mantienen y se devuelven aparte.
+    Only objects with exactly the names OpenStudio uses are removed; those created by the user
+    (e.g. natural ventilation) are kept and returned separately.
     """
     targets = {(zone_name + s).upper() for s in OS_VENTILATION_SUFFIXES}
     removed, others = [], []
     for zv in workspace.getObjectsByType(_iot("ZoneVentilation:DesignFlowRate")):
-        # Campo 1: "Zone or ZoneList or Space or SpaceList Name" (el nombre ha cambiado entre versiones)
+        # Field 1: "Zone or ZoneList or Space or SpaceList Name" (the name has changed between versions)
         if _get_idx(zv, 1).upper() != zone_name.upper():
             continue
         if zv.nameString().upper() in targets:
@@ -189,7 +189,7 @@ def _add_output_variables(workspace, frequency):
 
 
 class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
-    """An EnergyPlusMeasure."""
+    """Heat recovery, economizer and demand-controlled ventilation for ideal loads air systems."""
 
     def name(self):
         """Returns the human readable name."""
@@ -198,32 +198,31 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
     def description(self):
         """Human readable description."""
         return (
-            "Añade a las cargas ideales (Ideal Air Loads) un recuperador de calor del aire de "
-            "ventilación, un economizador (free-cooling) y ventilación según ocupación. Sirve para "
-            "cuantificar el ahorro de un recuperador sin modelar una instalación real. Es un "
-            "recuperador ideal: no tiene consumo de ventiladores, pérdidas de carga ni control de "
-            "escarcha, y su eficiencia es constante."
+            "Adds to the ideal loads air systems (Ideal Air Loads) a heat recovery unit on the "
+            "ventilation air, an outdoor air economizer (free cooling) and occupancy-based ventilation. "
+            "It quantifies the savings of heat recovery without modelling a real HVAC system. The heat "
+            "recovery is ideal: no fan energy, pressure drop or frost control, and constant effectiveness."
         )
 
     def modeler_description(self):
         """Human readable description of modeling approach."""
         return (
-            "Edita los objetos HVACTemplate:Zone:IdealLoadsAirSystem (casilla Ideal Air Loads) y "
-            "ZoneHVAC:IdealLoadsAirSystem (equipo añadido desde la librería) del IDF traducido. "
-            "IMPORTANTE: con la casilla Ideal Air Loads, OpenStudio 3.11 deja vacío el DSOA de las "
-            "cargas ideales y traduce el DesignSpecification:OutdoorAir a ZoneVentilation:DesignFlowRate "
-            "(per Person con el horario de ocupación; el resto, siempre activos). Ese aire no pasa por "
-            "el sistema, así que el recuperador y el economizador no tendrían ningún efecto. Con "
-            "'Pasar la ventilación por las cargas ideales' activado, la measure asigna a cada sistema "
-            "el DSOA de su zona (el de Sizing:Zone, que puede ser una DesignSpecification:OutdoorAir:"
-            "SpaceList), pone Outdoor Air Method = DetailedSpecification y elimina los ZoneVentilation "
-            "generados por OpenStudio (solo los que llevan sus nombres; los del usuario se conservan). "
-            "Para comparar casos, simule también el caso base con esta measure y recuperador = None, "
-            "de modo que el aire exterior sea idéntico. Con DCV = OccupancySchedule la parte por persona "
-            "sigue la ocupación (equivalente a lo que hace OpenStudio por defecto); con None se usa la "
-            "ocupación de diseño todo el tiempo. El horario del DSOA, si lo tiene, pasa a aplicarse. "
-            "El economizador exige un caudal máximo de refrigeración: si Cooling Limit es NoLimit se "
-            "cambia a LimitFlowRate con Maximum Cooling Air Flow Rate = autosize (necesita días de diseño)."
+            "Edits the HVACTemplate:Zone:IdealLoadsAirSystem (Ideal Air Loads checkbox) and "
+            "ZoneHVAC:IdealLoadsAirSystem (added from the library) objects of the translated IDF. "
+            "IMPORTANT: with the Ideal Air Loads checkbox, OpenStudio 3.11 leaves the DSOA of the ideal "
+            "loads empty and translates the DesignSpecification:OutdoorAir into ZoneVentilation:DesignFlowRate "
+            "objects (per person with the occupancy schedule; the rest always on). That air does not go "
+            "through the system, so heat recovery and economizer would have no effect. With 'Route the "
+            "ventilation through the ideal loads' enabled, the measure assigns to each system the DSOA of "
+            "its zone (the one in Sizing:Zone, which may be a DesignSpecification:OutdoorAir:SpaceList), "
+            "sets Outdoor Air Method = DetailedSpecification and removes the ZoneVentilation objects "
+            "generated by OpenStudio (only those with its names; user objects are kept). To compare cases, "
+            "also simulate the base case with this measure and heat recovery = None, so that the outdoor "
+            "air is identical. With DCV = OccupancySchedule the per-person part follows occupancy (as "
+            "OpenStudio does by default); with None the design occupancy is used at all times. The DSOA "
+            "schedule, if any, is applied. The economizer requires a maximum cooling air flow: if Cooling "
+            "Limit is NoLimit it is changed to LimitFlowRate with Maximum Cooling Air Flow Rate = autosize "
+            "(design days are required)."
         )
 
     def arguments(self, workspace: openstudio.Workspace):
@@ -233,30 +232,30 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
         hr_type = openstudio.measure.OSArgument.makeChoiceArgument(
             "heat_recovery_type",
             ["None", "Sensible", "Enthalpy"],
-            ["Sin recuperador (None)", "Sensible", "Entálpico: sensible + latente (Enthalpy)"],
+            ["No heat recovery (None)", "Sensible", "Enthalpy: sensible + latent (Enthalpy)"],
             True,
         )
-        hr_type.setDisplayName("Tipo de recuperador de calor (Heat Recovery Type)")
+        hr_type.setDisplayName("Heat Recovery Type")
         hr_type.setDescription(
-            "Solo actúa sobre el aire exterior que pasa por las cargas ideales y cuando el aire "
-            "extraído es más favorable que el exterior."
+            "Acts only on the outdoor air that goes through the ideal loads system, and only when the "
+            "exhaust air is more favourable than the outdoor air."
         )
         hr_type.setDefaultValue("Sensible")
         args.append(hr_type)
 
         sens_eff = openstudio.measure.OSArgument.makeDoubleArgument("sensible_effectiveness", True)
-        sens_eff.setDisplayName("Eficiencia sensible del recuperador (0-1)")
-        sens_eff.setDescription("Sensible Heat Recovery Effectiveness. Valor por defecto de EnergyPlus: 0.70.")
+        sens_eff.setDisplayName("Sensible heat recovery effectiveness (0-1)")
+        sens_eff.setDescription("Sensible Heat Recovery Effectiveness. EnergyPlus default: 0.70.")
         sens_eff.setDefaultValue(0.70)
         sens_eff.setMinValue(0.0)
         sens_eff.setMaxValue(1.0)
         args.append(sens_eff)
 
         lat_eff = openstudio.measure.OSArgument.makeDoubleArgument("latent_effectiveness", True)
-        lat_eff.setDisplayName("Eficiencia latente del recuperador (0-1)")
+        lat_eff.setDisplayName("Latent heat recovery effectiveness (0-1)")
         lat_eff.setDescription(
-            "Latent Heat Recovery Effectiveness. Solo se usa con recuperador entálpico. "
-            "Valor por defecto de EnergyPlus: 0.65."
+            "Latent Heat Recovery Effectiveness. Used only with enthalpy heat recovery. "
+            "EnergyPlus default: 0.65."
         )
         lat_eff.setDefaultValue(0.65)
         lat_eff.setMinValue(0.0)
@@ -267,25 +266,25 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
             "economizer_type",
             ["NoEconomizer", "DifferentialDryBulb", "DifferentialEnthalpy"],
             [
-                "Sin economizador (NoEconomizer)",
-                "Diferencial de temperatura seca (DifferentialDryBulb)",
-                "Diferencial de entalpía (DifferentialEnthalpy)",
+                "No economizer (NoEconomizer)",
+                "Differential dry-bulb (DifferentialDryBulb)",
+                "Differential enthalpy (DifferentialEnthalpy)",
             ],
             True,
         )
-        econ.setDisplayName("Economizador / free-cooling (Outdoor Air Economizer Type)")
+        econ.setDisplayName("Outdoor Air Economizer Type (free cooling)")
         econ.setDescription(
-            "Aumenta el aire exterior cuando hay demanda de refrigeración y el exterior es más "
-            "favorable. Obliga a limitar el caudal de refrigeración (LimitFlowRate, autosize)."
+            "Increases the outdoor air when there is a cooling demand and the outdoor air is more "
+            "favourable. Requires a cooling air flow limit (LimitFlowRate, autosize)."
         )
         econ.setDefaultValue("NoEconomizer")
         args.append(econ)
 
         route_oa = openstudio.measure.OSArgument.makeBoolArgument("route_outdoor_air", True)
-        route_oa.setDisplayName("Pasar la ventilación (DSOA) por las cargas ideales")
+        route_oa.setDisplayName("Route the ventilation (DSOA) through the ideal loads")
         route_oa.setDescription(
-            "Necesario para que el recuperador y el economizador funcionen con la casilla Ideal Air "
-            "Loads: conecta el DSOA de la zona y elimina los ZoneVentilation que genera OpenStudio."
+            "Required for heat recovery and the economizer to work with the Ideal Air Loads checkbox: "
+            "connects the zone DSOA and removes the ZoneVentilation objects generated by OpenStudio."
         )
         route_oa.setDefaultValue(True)
         args.append(route_oa)
@@ -293,30 +292,30 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
         dcv = openstudio.measure.OSArgument.makeChoiceArgument(
             "dcv_type",
             ["OccupancySchedule", "None"],
-            ["Según ocupación (OccupancySchedule)", "Caudal de diseño constante (None)"],
+            ["Follows occupancy (OccupancySchedule)", "Constant design flow (None)"],
             True,
         )
-        dcv.setDisplayName("Ventilación controlada por demanda (Demand Controlled Ventilation Type)")
+        dcv.setDisplayName("Demand Controlled Ventilation Type")
         dcv.setDescription(
-            "OccupancySchedule reproduce lo que hace OpenStudio por defecto (la parte por persona "
-            "sigue al horario de ocupación)."
+            "OccupancySchedule reproduces OpenStudio's default behaviour (the per-person part follows "
+            "the occupancy schedule)."
         )
         dcv.setDefaultValue("OccupancySchedule")
         args.append(dcv)
 
         zone_filter = openstudio.measure.OSArgument.makeStringArgument("zone_name_filter", False)
-        zone_filter.setDisplayName("Aplicar solo a zonas cuyo nombre contenga (vacío = todas)")
+        zone_filter.setDisplayName("Apply only to zones whose name contains (empty = all)")
         zone_filter.setDefaultValue("")
         args.append(zone_filter)
 
         out_freq = openstudio.measure.OSArgument.makeChoiceArgument(
             "output_frequency",
             ["None", "Hourly", "Daily", "Monthly", "RunPeriod"],
-            ["No añadir", "Horaria", "Diaria", "Mensual", "Periodo completo"],
+            ["Do not add", "Hourly", "Daily", "Monthly", "Run period"],
             True,
         )
-        out_freq.setDisplayName("Añadir variables de salida de las cargas ideales")
-        out_freq.setDescription("Energía recuperada, aire exterior, horas de economizador, etc.")
+        out_freq.setDisplayName("Add ideal loads output variables")
+        out_freq.setDescription("Heat recovered, outdoor air, economizer hours, etc.")
         out_freq.setDefaultValue("Hourly")
         args.append(out_freq)
 
@@ -335,7 +334,7 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
             return False
 
         # ------------------------------------------------------------------
-        # 1. Leer argumentos
+        # 1. Read arguments
         # ------------------------------------------------------------------
         hr_type = runner.getStringArgumentValue("heat_recovery_type", user_arguments)
         sens_eff = runner.getDoubleArgumentValue("sensible_effectiveness", user_arguments)
@@ -346,38 +345,38 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
         zone_filter = runner.getStringArgumentValue("zone_name_filter", user_arguments).strip()
         out_freq = runner.getStringArgumentValue("output_frequency", user_arguments)
 
-        for label, value in (("sensible", sens_eff), ("latente", lat_eff)):
+        for label, value in (("sensible", sens_eff), ("latent", lat_eff)):
             if not 0.0 <= value <= 1.0:
-                runner.registerError(f"La eficiencia {label} debe estar entre 0 y 1 (valor: {value}).")
+                runner.registerError(f"The {label} effectiveness must be between 0 and 1 (value: {value}).")
                 return False
 
         # ------------------------------------------------------------------
-        # 2. Localizar los sistemas de cargas ideales y la zona de cada uno
+        # 2. Find the ideal loads systems and the zone of each one
         # ------------------------------------------------------------------
         templates = list(workspace.getObjectsByType(_iot(TEMPLATE_TYPE)))
         zonehvacs = list(workspace.getObjectsByType(_iot(ZONEHVAC_TYPE)))
         runner.registerInitialCondition(
-            f"El IDF tiene {len(templates)} {TEMPLATE_TYPE} (casilla Ideal Air Loads) y "
+            f"The IDF has {len(templates)} {TEMPLATE_TYPE} (Ideal Air Loads checkbox) and "
             f"{len(zonehvacs)} {ZONEHVAC_TYPE}."
         )
         if not templates and not zonehvacs:
             runner.registerAsNotApplicable(
-                "No hay cargas ideales en el modelo (marque Ideal Air Loads en Thermal Zones)."
+                "The model has no ideal loads (tick Ideal Air Loads in the Thermal Zones tab)."
             )
             return True
 
         zonehvac_zone = _zonehvac_zone_map(workspace)
-        systems = [(o, "template", _get_idx(o, 0)) for o in templates]  # campo 0 = Zone Name
+        systems = [(o, "template", _get_idx(o, 0)) for o in templates]  # field 0 = Zone Name
         systems += [(o, "zonehvac", zonehvac_zone.get(o.nameString().upper(), "")) for o in zonehvacs]
 
         if zone_filter:
             systems = [s for s in systems if zone_filter.upper() in s[2].upper()]
             if not systems:
-                runner.registerAsNotApplicable(f"Ninguna zona con cargas ideales contiene '{zone_filter}'.")
+                runner.registerAsNotApplicable(f"No zone with ideal loads contains '{zone_filter}'.")
                 return True
 
         # ------------------------------------------------------------------
-        # 3. Comprobaciones previas para el economizador
+        # 3. Economizer pre-checks
         # ------------------------------------------------------------------
         use_econ = econ_type != "NoEconomizer"
         if use_econ:
@@ -391,14 +390,14 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
             )
             if n_sizing_periods == 0:
                 runner.registerError(
-                    "El economizador necesita autodimensionar el caudal máximo de refrigeración y el "
-                    "modelo no tiene días de diseño. Importe un archivo .ddy en OpenStudio "
-                    "(Site > Design Days) o elija NoEconomizer."
+                    "The economizer needs to autosize the maximum cooling air flow and the model has no "
+                    "design days. Import a .ddy file in OpenStudio (Site > Design Days) or choose "
+                    "NoEconomizer."
                 )
                 return False
 
         # ------------------------------------------------------------------
-        # 4. Editar cada sistema
+        # 4. Edit each system
         # ------------------------------------------------------------------
         zone_dsoa = _zone_dsoa_map(workspace)
         autosized_any = False
@@ -408,7 +407,7 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
         for obj, kind, zone in systems:
             label = zone if zone else obj.nameString()
 
-            # 4a. Aire exterior a través de las cargas ideales
+            # 4a. Outdoor air through the ideal loads
             removed = []
             if route_oa:
                 dsoa = zone_dsoa.get(zone.upper(), "") if zone else ""
@@ -417,20 +416,20 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
                         _set(obj, F_OA_METHOD, "DetailedSpecification")
                         _set(obj, F_DSOA, dsoa)
                     else:
-                        runner.registerWarning(f"{label}: no se encontró el DSOA de la zona en Sizing:Zone.")
+                        runner.registerWarning(f"{label}: the zone DSOA was not found in Sizing:Zone.")
                 elif not _get(obj, F_DSOA) and dsoa:
-                    # En un ZoneHVAC añadido desde la librería OpenStudio ya suele rellenarlo.
+                    # OpenStudio usually fills it in for a ZoneHVAC added from the library.
                     _set(obj, F_DSOA, dsoa)
                 if zone:
                     removed, others = _remove_os_ventilation(workspace, zone)
                     n_vent_removed += len(removed)
                     if others:
                         runner.registerWarning(
-                            f"{label}: se mantienen ZoneVentilation definidos por el usuario "
-                            f"({', '.join(others)}); ese aire no pasa por el recuperador."
+                            f"{label}: user-defined ZoneVentilation objects are kept "
+                            f"({', '.join(others)}); that air does not go through the heat recovery."
                         )
 
-            # ¿Pasa realmente aire exterior por este sistema?
+            # Does outdoor air actually go through this system?
             if kind == "template":
                 method = _get(obj, F_OA_METHOD) or "None"
                 if method == "DetailedSpecification":
@@ -442,12 +441,12 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
 
             _set(obj, F_DCV, dcv_type)
 
-            # 4b. Recuperador de calor
+            # 4b. Heat recovery
             _set(obj, F_HR, hr_type)
             _set(obj, F_SENS, f"{sens_eff:.4g}")
             _set(obj, F_LAT, f"{lat_eff:.4g}")
 
-            # 4c. Economizador (necesita un límite de caudal de refrigeración)
+            # 4c. Economizer (requires a cooling air flow limit)
             _set(obj, F_ECON, econ_type)
             if use_econ:
                 limit = _get(obj, F_COOL_LIMIT) or "NoLimit"
@@ -463,40 +462,40 @@ class IdealLoadsAllParams(openstudio.measure.EnergyPlusMeasure):
                 n_without_oa += 1
                 if hr_type != "None" or use_econ:
                     runner.registerWarning(
-                        f"{label}: no pasa aire exterior por las cargas ideales, así que el "
-                        "recuperador/economizador no tendrá efecto. Revise el Design Specification "
-                        "Outdoor Air del space type o active 'Pasar la ventilación por las cargas ideales'."
+                        f"{label}: no outdoor air goes through the ideal loads, so heat recovery / "
+                        "economizer will have no effect. Check the Design Specification Outdoor Air of the "
+                        "space type or enable 'Route the ventilation through the ideal loads'."
                     )
 
             runner.registerInfo(
-                f"{label}: HR={hr_type} (sens={sens_eff:.2f}, lat={lat_eff:.2f}), economizador={econ_type}, "
-                f"DCV={dcv_type}, DSOA='{_get(obj, F_DSOA)}', ZoneVentilation eliminados={len(removed)}."
+                f"{label}: HR={hr_type} (sens={sens_eff:.2f}, lat={lat_eff:.2f}), economizer={econ_type}, "
+                f"DCV={dcv_type}, DSOA='{_get(obj, F_DSOA)}', ZoneVentilation removed={len(removed)}."
             )
 
-        # El autosize del caudal de refrigeración necesita el cálculo de dimensionado de zonas.
+        # Autosizing the cooling air flow requires the zone sizing calculation.
         if autosized_any:
             for sc in workspace.getObjectsByType(_iot("SimulationControl")):
                 if _get(sc, "Do Zone Sizing Calculation").upper() != "YES":
                     _set(sc, "Do Zone Sizing Calculation", "Yes")
-                    runner.registerInfo("SimulationControl: activado 'Do Zone Sizing Calculation'.")
+                    runner.registerInfo("SimulationControl: 'Do Zone Sizing Calculation' enabled.")
         if use_econ:
             runner.registerWarning(
-                "Con economizador, la refrigeración de las cargas ideales queda limitada al caudal "
-                "autodimensionado. Revise las horas de refrigeración no satisfechas (Time Setpoint Not "
-                "Met); si aparecen, aumente el Cooling Sizing Factor de Sizing:Parameters."
+                "With an economizer, the ideal loads cooling is limited to the autosized air flow. Check "
+                "the unmet cooling hours (Time Setpoint Not Met); if there are any, increase the Cooling "
+                "Sizing Factor in Sizing:Parameters."
             )
 
         # ------------------------------------------------------------------
-        # 5. Variables de salida
+        # 5. Output variables
         # ------------------------------------------------------------------
         if out_freq != "None":
             n_added = _add_output_variables(workspace, out_freq)
-            runner.registerInfo(f"Añadidas {n_added} Output:Variable ({out_freq}).")
+            runner.registerInfo(f"Added {n_added} Output:Variable objects ({out_freq}).")
 
         runner.registerFinalCondition(
-            f"Modificados {len(systems)} sistemas de cargas ideales: recuperador {hr_type}, "
-            f"economizador {econ_type}, DCV {dcv_type}. ZoneVentilation de OpenStudio eliminados: "
-            f"{n_vent_removed}. Sistemas sin aire exterior: {n_without_oa}."
+            f"Modified {len(systems)} ideal loads systems: heat recovery {hr_type}, economizer "
+            f"{econ_type}, DCV {dcv_type}. OpenStudio ZoneVentilation objects removed: {n_vent_removed}. "
+            f"Systems without outdoor air: {n_without_oa}."
         )
         return True
 
