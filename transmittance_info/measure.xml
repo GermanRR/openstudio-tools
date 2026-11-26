@@ -3,33 +3,34 @@
   <schema_version>3.1</schema_version>
   <name>transmittance_info</name>
   <uid>47c89232-80fc-4b9e-a34f-93b055792732</uid>
-  <version_id>f231f057-1549-4043-b82c-4363bd8c00d4</version_id>
-  <version_modified>2026-11-26T15:13:53Z</version_modified>
+  <version_id>5709bebd-ab23-4f67-b976-84a97b4fdce9</version_id>
+  <version_modified>2026-11-26T15:54:37Z</version_modified>
   <xml_checksum>2E80787A</xml_checksum>
   <class_name>TransmittanceInfo</class_name>
   <display_name>Transmittance_info</display_name>
-  <description>Calcula, sin simular, la transmitancia térmica U de los cerramientos opacos y de los vidrios que están aplicados en el modelo y abre un informe en el navegador. Úsela con «Apply Measure Now» (menú Components &amp; Measures). No modifica el modelo.</description>
-  <modeler_description>Recorre Surfaces y SubSurfaces y toma su construcción efectiva (incluidas las de los Default Construction Sets). Opacos: U = 1/(Rsi + Σe/λ + Rse) con Rsi/Rse de UNE-EN ISO 6946 / DA DB-HE/1 según la inclinación (flujo horizontal si 60º ≤ inclinación ≤ 120º) y la condición de contorno (terreno: Rse = 0, sin terreno; particiones: Rsi a ambos lados); también la U con películas ASHRAE de PlanarSurface::uFactor(). F/C-factor: U equivalente F·P/A y C. Huecos: SimpleGlazing con sus valores; vidrios por capas con la U del centro del vidrio de ISO 15099 en condiciones NFRC de invierno (21/−18 ºC, hc,e = 26 W/m²K, convección interior ISO 15099 con altura 1 m, gases y mezclas con los coeficientes de EnergyPlus) y la Ug de UNE-EN 673. Áreas netas × multiplicador de zona; las particiones emparejadas con la misma construcción se cuentan una vez. El informe HTML se guarda en la carpeta indicada (o en la temporal del sistema) y se abre con el navegador predeterminado.</modeler_description>
+  <description>Computes, without simulating, the thermal transmittance (U-value) of the opaque constructions and glazing applied in the model and opens a report in the web browser. Use it with 'Apply Measure Now' (Components &amp; Measures menu). It does not modify the model.</description>
+  <modeler_description>Goes through Surfaces and SubSurfaces and takes their effective construction (including those from Default Construction Sets). Opaque: U = 1/(Rsi + Σe/λ + Rse) with Rsi/Rse from EN ISO 6946 / CTE DA DB-HE/1 according to the tilt (horizontal flow if 60° ≤ tilt ≤ 120°) and the boundary condition (ground: Rse = 0, ground not included; partitions: Rsi on both sides); also the U-value with the ASHRAE films of the EnergyPlus Envelope Summary. F/C-factor: equivalent U = F·P/A and C. Glazing: SimpleGlazing with its own values; layered glazing with the ISO 15099 centre-of-glass U-value under NFRC winter conditions (21/−18 °C, hc,out = 26 W/m²K, ISO 15099 inside convection with a 1 m height, gases and mixtures with the EnergyPlus coefficients) and the EN 673 Ug. Net areas × zone multiplier; paired partitions are counted once. The HTML report is saved in the chosen folder (or in the system temporary folder) and opened with the default web browser.</modeler_description>
   <arguments>
     <argument>
-      <name>abrir_navegador</name>
-      <display_name>Abrir el informe en el navegador al terminar</display_name>
+      <name>open_browser</name>
+      <display_name>Open the report in the web browser when finished</display_name>
       <type>Boolean</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
       <default_value>true</default_value>
     </argument>
     <argument>
-      <name>carpeta_salida</name>
-      <display_name>Carpeta donde guardar el informe (vacío = carpeta temporal del sistema)</display_name>
-      <description>Por ejemplo C:\Users\nombre\Documents. La ruta del informe aparece en los mensajes.</description>
+      <name>output_folder</name>
+      <display_name>Folder where the report is saved (empty = system temporary folder)</display_name>
+      <description>For example C:\Users\name\Documents. The report path is shown in the measure messages.</description>
       <type>String</type>
       <required>false</required>
       <model_dependent>false</model_dependent>
+      <default_value></default_value>
     </argument>
     <argument>
-      <name>incluir_interiores</name>
-      <display_name>Incluir particiones y huecos interiores</display_name>
+      <name>include_interior</name>
+      <display_name>Include interior partitions, doors and windows</display_name>
       <type>Boolean</type>
       <required>true</required>
       <model_dependent>false</model_dependent>
@@ -90,7 +91,7 @@
       <filename>measure.py</filename>
       <filetype>py</filetype>
       <usage_type>script</usage_type>
-      <checksum>212A9EA5</checksum>
+      <checksum>48ACA6EC</checksum>
     </file>
     <file>
       <filename>example_model.osm</filename>
@@ -102,7 +103,7 @@
       <filename>test_transmittance_info.py</filename>
       <filetype>py</filetype>
       <usage_type>test</usage_type>
-      <checksum>0A790CFC</checksum>
+      <checksum>ED79E920</checksum>
     </file>
   </files>
 </measure>

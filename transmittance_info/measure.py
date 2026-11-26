@@ -1,18 +1,20 @@
-"""Transmitancias térmicas de los cerramientos y huecos del modelo. ModelMeasure para OpenStudio 3.11.
+"""Transmittance_info: thermal transmittance (U-value) of the constructions and glazing of the model.
 
-Pensada para «Apply Measure Now» (menú Components & Measures): calcula, sin simular, la transmitancia U de las
-construcciones que están aplicadas en el modelo (directamente o mediante conjuntos de construcciones) y abre un
-informe HTML en el navegador. No modifica el modelo.
+Copyright (c) 2026 Germán Ramos Ruiz. SPDX-License-Identifier: Apache-2.0
 
-  * Cerramientos opacos: U = 1 / (Rsi + Σ e/λ + Rse) con las resistencias superficiales de UNE-EN ISO 6946
-    (las del DA DB-HE/1 del CTE), según la posición del cerramiento y el sentido del flujo de calor. Se añade, para
-    comparar, la U con las películas de ASHRAE que usa OpenStudio y que publica el informe de EnergyPlus.
-  * Vidrios «Simple Glazing System»: la U del propio objeto.
-  * Vidrios por capas: la U del vidrio (centro del vidrio) como la calcula EnergyPlus (ISO 15099, condiciones de
-    invierno NFRC: 21 ºC interior, -18 ºC exterior, hc exterior 26 W/m²K) y la Ug de UNE-EN 673 (la que declaran
-    los fabricantes). No incluye el marco.
+ModelMeasure for OpenStudio 3.11, meant for "Apply Measure Now" (Components & Measures menu): without simulating, it
+computes the U-value of the constructions applied in the model (directly or through construction sets) and opens an
+HTML report in the web browser. It does not modify the model.
 
-Probada con OpenStudio 3.11.0 (EnergyPlus 25.2.0).
+  * Opaque constructions: U = 1 / (Rsi + Σ e/λ + Rse) with the surface resistances of EN ISO 6946 (the ones used by the
+    Spanish Building Code, CTE DA DB-HE/1), according to the position of the element and the direction of heat flow.
+    For comparison, the U-value with the ASHRAE air films reported by EnergyPlus is also given.
+  * "Simple Glazing System" glazing: the U-factor of the object itself.
+  * Layered glazing: the centre-of-glass U-value as EnergyPlus computes it (ISO 15099, NFRC winter conditions: 21 °C
+    inside, -18 °C outside, outside convection 26 W/m²K) and the Ug of EN 673 (the value declared by manufacturers).
+    Frames are not included.
+
+Tested with OpenStudio 3.11.0 (EnergyPlus 25.2.0).
 """
 
 import datetime
@@ -29,7 +31,7 @@ from pathlib import Path
 import openstudio
 
 # ---------------------------------------------------------------------------
-# Constantes
+# Constants
 # ---------------------------------------------------------------------------
 
 SIGMA = 5.670374419e-8  # W/m²K⁴
@@ -38,65 +40,67 @@ R_GAS = 8314.462618  # J/kmol·K
 P_ATM = 101325.0  # Pa
 KELVIN = 273.15
 
-# Resistencias superficiales (m²K/W), UNE-EN ISO 6946 / DA DB-HE/1
+# Surface resistances (m²K/W), EN ISO 6946 / CTE DA DB-HE/1
 RSI = {"h": 0.13, "up": 0.10, "down": 0.17}
 RSE_EXT = 0.04
-FLOW_LABEL = {"h": "horizontal", "up": "ascendente", "down": "descendente"}
-# Películas de ASHRAE 90.1 (apéndice A) que usa el informe Envelope Summary de EnergyPlus (m²K/W)
-IP_R = 0.176110  # h·ft²·ºF/Btu -> m²K/W
+FLOW_LABEL = {"h": "horizontal", "up": "upward", "down": "downward"}
+# ASHRAE 90.1 (Appendix A) air films used by the EnergyPlus Envelope Summary report (m²K/W)
+IP_R = 0.176110  # h·ft²·°F/Btu -> m²K/W
 ASHRAE_RSI = {"Wall": 0.68 * IP_R, "RoofCeiling": 0.61 * IP_R, "Floor": 0.92 * IP_R}
 ASHRAE_RSE = 0.17 * IP_R
 
-# Gases según ISO 15099, los mismos coeficientes que EnergyPlus: (k: a, b), (μ: a, b), (cp: a, b), M
-# k = a + b·T [W/m·K], μ = a + b·T [Pa·s], cp = a + b·T [J/kg·K], T en K
+# Gases according to ISO 15099, the same coefficients as EnergyPlus: (k: a, b), (μ: a, b), (cp: a, b), M
+# k = a + b·T [W/m·K], μ = a + b·T [Pa·s], cp = a + b·T [J/kg·K], T in K
 GASES_15099 = {
     "Air": ((2.873e-3, 7.760e-5), (3.723e-6, 4.940e-8), (1002.737, 1.2324e-2), 28.97),
     "Argon": ((2.285e-3, 5.149e-5), (3.379e-6, 6.451e-8), (521.9285, 0.0), 39.948),
     "Krypton": ((9.443e-4, 2.826e-5), (2.213e-6, 7.777e-8), (248.0907, 0.0), 83.8),
     "Xenon": ((4.538e-4, 1.723e-5), (1.069e-6, 7.414e-8), (158.3397, 0.0), 131.3),
 }
-# Gases según UNE-EN 673 (10 ºC): ρ [kg/m³], μ [Pa·s], λ [W/m·K], c [J/kg·K]
+# Gases according to EN 673 (10 °C): ρ [kg/m³], μ [Pa·s], λ [W/m·K], c [J/kg·K]
 GASES_EN673 = {
     "Air": (1.232, 1.761e-5, 2.496e-2, 1008.0),
     "Argon": (1.699, 2.164e-5, 1.684e-2, 519.0),
     "Krypton": (3.56, 2.4e-5, 0.900e-2, 245.0),
     "Xenon": (5.689, 2.226e-5, 0.529e-2, 161.0),
 }
-GAS_ES = {"Air": "aire", "Argon": "argón", "Krypton": "kriptón", "Xenon": "xenón", "Custom": "gas personalizado"}
+GAS_NAMES = {"Air": "air", "Argon": "argon", "Krypton": "krypton", "Xenon": "xenon", "Custom": "custom gas"}
 
-# Condiciones de invierno NFRC (EnergyPlus, U nominal del vidrio)
+# NFRC winter conditions (EnergyPlus nominal glass U-factor)
 NFRC_T_IN, NFRC_T_OUT, NFRC_HC_OUT = 21.0 + KELVIN, -18.0 + KELVIN, 26.0
-NOMINAL_HEIGHT = 1.0  # m, altura del vidrio para la convección (cálculo nominal)
+NOMINAL_HEIGHT = 1.0  # m, glass height for convection (nominal calculation)
 
 GROUND_BCS = ("Ground", "GroundFCfactorMethod", "Foundation", "GroundSlabPreprocessorAverage",
               "GroundSlabPreprocessorCore", "GroundSlabPreprocessorPerimeter",
               "GroundBasementPreprocessorAverageWall", "GroundBasementPreprocessorAverageFloor",
               "GroundBasementPreprocessorUpperWall", "GroundBasementPreprocessorLowerWall")
-GLAZED_SUBSURFACES = {"FixedWindow": "Ventana", "OperableWindow": "Ventana", "GlassDoor": "Puerta acristalada",
-                      "Skylight": "Lucernario", "TubularDaylightDome": "Lucernario tubular",
-                      "TubularDaylightDiffuser": "Lucernario tubular"}
+GLAZED_SUBSURFACES = {"FixedWindow": "Window", "OperableWindow": "Window", "GlassDoor": "Glass door",
+                      "Skylight": "Skylight", "TubularDaylightDome": "Tubular daylighting device",
+                      "TubularDaylightDiffuser": "Tubular daylighting device"}
 
-CATEGORY_ORDER = ["Fachada", "Cubierta", "Suelo en contacto con el aire exterior",
-                  "Muro en contacto con el terreno", "Solera / suelo en contacto con el terreno",
-                  "Cubierta enterrada", "Partición interior vertical", "Partición interior horizontal",
-                  "Puerta exterior", "Puerta interior",
-                  "Ventana", "Puerta acristalada", "Lucernario", "Lucernario tubular", "Hueco interior"]
+CAT_WALL, CAT_ROOF, CAT_EXP_FLOOR = "Exterior wall", "Roof", "Exposed floor (outdoor air below)"
+CAT_G_WALL, CAT_G_FLOOR, CAT_G_ROOF = "Below-grade wall", "Slab / ground floor", "Below-grade roof"
+CAT_PART_V, CAT_PART_H = "Interior partition (vertical)", "Interior partition (horizontal)"
+GROUND_CATS = (CAT_G_WALL, CAT_G_FLOOR, CAT_G_ROOF)
+CATEGORY_ORDER = [CAT_WALL, CAT_ROOF, CAT_EXP_FLOOR, CAT_G_WALL, CAT_G_FLOOR, CAT_G_ROOF, CAT_PART_V, CAT_PART_H,
+                  "Exterior door", "Interior door",
+                  "Window", "Glass door", "Skylight", "Tubular daylighting device", "Interior window"]
 
 
 # ---------------------------------------------------------------------------
-# Cerramientos opacos
+# Opaque constructions
 # ---------------------------------------------------------------------------
 
 
 def flow_direction(tilt_deg):
-    """Sentido del flujo (de dentro a fuera) según la inclinación de la normal exterior respecto a la vertical."""
+    """Direction of heat flow (inside to outside) from the tilt of the outward normal with respect to the vertical."""
     if 60.0 <= tilt_deg <= 120.0:
         return "h"
     return "up" if tilt_deg < 60.0 else "down"
 
 
 def opaque_layer(material):
-    """dict(nombre, tipo, e, λ, R) de una capa opaca, o None si no se puede calcular."""
+    """dict(name, kind, e, λ, R) of an opaque layer, or None if it cannot be computed."""
     name = material.nameString()
     o = material.to_StandardOpaqueMaterial()
     if o.is_initialized():
@@ -105,17 +109,17 @@ def opaque_layer(material):
                     R=m.thickness() / m.thermalConductivity())
     o = material.to_MasslessOpaqueMaterial()
     if o.is_initialized():
-        return dict(name=name, kind="Sin masa (R)", e=None, lam=None, R=o.get().thermalResistance())
+        return dict(name=name, kind="No mass (R)", e=None, lam=None, R=o.get().thermalResistance())
     o = material.to_AirGap()
     if o.is_initialized():
-        return dict(name=name, kind="Cámara de aire (R)", e=None, lam=None, R=o.get().thermalResistance())
+        return dict(name=name, kind="Air gap (R)", e=None, lam=None, R=o.get().thermalResistance())
     o = material.to_InfraredTransparentMaterial()
     if o.is_initialized():
-        return dict(name=name, kind="Transparente al infrarrojo", e=None, lam=None, R=0.0)
+        return dict(name=name, kind="Infrared transparent", e=None, lam=None, R=0.0)
     o = material.to_RoofVegetation()
     if o.is_initialized():
         m = o.get()
-        return dict(name=name, kind="Cubierta vegetal (suelo seco)", e=m.thickness(), lam=m.conductivityofDrySoil(),
+        return dict(name=name, kind="Green roof (dry soil)", e=m.thickness(), lam=m.conductivityofDrySoil(),
                     R=m.thickness() / m.conductivityofDrySoil())
     return None
 
@@ -125,7 +129,7 @@ def opaque_u(r_layers, rsi, rse):
 
 
 def ashrae_films(surface_type, exterior, ground):
-    """Rsi + Rse de ASHRAE como en el Envelope Summary de EnergyPlus (por tipo de superficie, no por inclinación)."""
+    """ASHRAE Rsi + Rse as in the EnergyPlus Envelope Summary (by surface type, not by tilt)."""
     rsi = ASHRAE_RSI.get(surface_type, ASHRAE_RSI["Wall"])
     if exterior:
         return rsi + ASHRAE_RSE
@@ -133,7 +137,7 @@ def ashrae_films(surface_type, exterior, ground):
         return rsi
     if surface_type == "Wall":
         return 2 * ASHRAE_RSI["Wall"]
-    return ASHRAE_RSI["RoofCeiling"] + ASHRAE_RSI["Floor"]  # forjado interior: una cara ascendente y otra descendente
+    return ASHRAE_RSI["RoofCeiling"] + ASHRAE_RSI["Floor"]  # interior floor: one face upward and the other downward
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +146,7 @@ def ashrae_films(surface_type, exterior, ground):
 
 
 def _pure_15099(gas, t):
-    """(k, μ, cp, M) de un gas puro a la temperatura t [K]. gas: nombre o dict de coeficientes (gas personalizado)."""
+    """(k, μ, cp, M) of a pure gas at temperature t [K]. gas: name or dict of coefficients (custom gas)."""
     if isinstance(gas, str):
         (ka, kb), (ma, mb), (ca, cb), mw = GASES_15099[gas]
         return ka + kb * t, ma + mb * t, ca + cb * t, mw
@@ -153,14 +157,14 @@ def _pure_15099(gas, t):
 
 
 def gas_properties_15099(mix, t):
-    """(k, μ, cp, ρ) de una mezcla [(fracción, gas)] a t [K], con las reglas de mezcla de ISO 15099."""
+    """(k, μ, cp, ρ) of a mixture [(fraction, gas)] at t [K], with the ISO 15099 mixing rules."""
     comps = [(x,) + _pure_15099(g, t) for x, g in mix if x > 0]
     m_mix = sum(x * mw for x, _, _, _, mw in comps)
     rho = P_ATM * m_mix / (R_GAS * t)
     if len(comps) == 1:
         _, k, mu, cp, _ = comps[0]
         return k, mu, cp, rho
-    # viscosidad
+    # viscosity
     mu_mix = 0.0
     for i, (xi, _, mui, _, mi) in enumerate(comps):
         s = 0.0
@@ -169,7 +173,7 @@ def gas_properties_15099(mix, t):
                 phi = (1 + math.sqrt(mui / muj) * (mj / mi) ** 0.25) ** 2 / (math.sqrt(8) * math.sqrt(1 + mi / mj))
                 s += phi * xj / xi
         mu_mix += mui / (1 + s)
-    # conductividad: parte monoatómica (k') y resto (k'')
+    # conductivity: monatomic part (k') and the rest (k'')
     kp = [3.75 * R_GAS / mi * mui for _, _, mui, _, mi in comps]
     kpp = [ki - kpi for (_, ki, _, _, _), kpi in zip(comps, kp)]
     k1 = k2 = 0.0
@@ -189,12 +193,12 @@ def gas_properties_15099(mix, t):
 
 
 def gas_properties_en673(mix):
-    """(ρ, μ, λ, c) de una mezcla según UNE-EN 673 (10 ºC, ponderación lineal por fracción en volumen)."""
+    """(ρ, μ, λ, c) of a mixture according to EN 673 (10 °C, linear weighting by volume fraction)."""
     out = [0.0, 0.0, 0.0, 0.0]
     for x, g in mix:
         if isinstance(g, str):
             vals = GASES_EN673[g]
-        else:  # gas personalizado: coeficientes de ISO 15099 a 10 ºC
+        else:  # custom gas: ISO 15099 coefficients at 10 °C
             k, mu, cp, rho = gas_properties_15099([(1.0, g)], 283.15)
             vals = (rho, mu, k, cp)
         for i in range(4):
@@ -203,12 +207,12 @@ def gas_properties_en673(mix):
 
 
 # ---------------------------------------------------------------------------
-# Vidrios por capas
+# Layered glazing
 # ---------------------------------------------------------------------------
 
 
 def _gap_nusselt_15099(ra, aspect):
-    """Número de Nusselt de una cámara vertical (ISO 15099, inclinación 90º)."""
+    """Nusselt number of a vertical cavity (ISO 15099, tilt 90°)."""
     if ra > 5.0e4:
         nu1 = 0.0673838 * ra ** (1.0 / 3.0)
     elif ra > 1.0e4:
@@ -220,7 +224,7 @@ def _gap_nusselt_15099(ra, aspect):
 
 
 def _inside_hc_15099(t_surf, t_air, height=NOMINAL_HEIGHT):
-    """Convección natural en la cara interior de un vidrio vertical (ISO 15099, apartado 8.3.2.2)."""
+    """Natural convection on the inside face of a vertical glazing (ISO 15099, section 8.3.2.2)."""
     dt = abs(t_surf - t_air)
     if dt < 1e-6:
         return 0.0
@@ -236,20 +240,20 @@ def _inside_hc_15099(t_surf, t_air, height=NOMINAL_HEIGHT):
 
 
 def u_glass_15099(layers, t_in=NFRC_T_IN, t_out=NFRC_T_OUT, hc_out=NFRC_HC_OUT):
-    """U del centro del vidrio [W/m²K] en condiciones nominales, como EnergyPlus (ISO 15099).
+    """Centre-of-glass U-value [W/m²K] under nominal conditions, as EnergyPlus computes it (ISO 15099).
 
-    layers: de fuera a dentro; vidrio = dict(kind="glass", t, k, ef, eb); cámara = dict(kind="gas", t, mix).
+    layers: outside to inside; glass = dict(kind="glass", t, k, ef, eb); gap = dict(kind="gas", t, mix).
     """
     n = len(layers)
     if n == 0 or layers[0]["kind"] != "glass" or layers[-1]["kind"] != "glass":
         return None
-    # temperaturas de las caras: 2 por vidrio, en orden de fuera a dentro
+    # face temperatures: 2 per glass pane, from outside to inside
     glasses = [i for i, lay in enumerate(layers) if lay["kind"] == "glass"]
     nfaces = 2 * len(glasses)
     temps = [t_out + (t_in - t_out) * (f + 1) / (nfaces + 1) for f in range(nfaces)]
     u = None
     for _ in range(200):
-        res = []  # resistencias en serie
+        res = []  # resistances in series
         t1 = temps[0]
         hr_out = layers[0]["ef"] * SIGMA * (t1 ** 4 - t_out ** 4) / (t1 - t_out) if abs(t1 - t_out) > 1e-9 else \
             4 * layers[0]["ef"] * SIGMA * t_out ** 3
@@ -278,7 +282,7 @@ def u_glass_15099(layers, t_in=NFRC_T_IN, t_out=NFRC_T_OUT, hc_out=NFRC_HC_OUT):
         res.append(1.0 / (_inside_hc_15099(tn, t_in) + hr_in))
         u_new = 1.0 / sum(res)
         q = u_new * (t_in - t_out)
-        # nuevas temperaturas de las caras, desde el exterior
+        # new face temperatures, from the outside
         new, t = [], t_out
         for r in res[:-1]:
             t += q * r
@@ -292,10 +296,10 @@ def u_glass_15099(layers, t_in=NFRC_T_IN, t_out=NFRC_T_OUT, hc_out=NFRC_HC_OUT):
 
 
 def ug_en673(layers):
-    """Ug [W/m²K] según UNE-EN 673 (vidrio vertical, ΔT = 15 K, Tm = 283 K, he = 25 W/m²K)."""
+    """Ug [W/m²K] according to EN 673 (vertical glazing, ΔT = 15 K, Tm = 283 K, he = 25 W/m²K)."""
     if not layers or layers[0]["kind"] != "glass" or layers[-1]["kind"] != "glass":
         return None
-    r_glass = sum(lay["t"] * 1.0 for lay in layers if lay["kind"] == "glass")  # resistividad del vidrio 1 m·K/W
+    r_glass = sum(lay["t"] * 1.0 for lay in layers if lay["kind"] == "glass")  # glass resistivity 1 m·K/W
     gaps = [(i, lay) for i, lay in enumerate(layers) if lay["kind"] == "gas"]
     tm = 283.0
     dts = [15.0 / max(len(gaps), 1)] * len(gaps)
@@ -316,12 +320,12 @@ def ug_en673(layers):
         if all(abs(a - b) < 1e-6 for a, b in zip(new, dts)):
             break
         dts = new
-    hi = 3.6 + 4.1 * layers[-1]["eb"] / 0.837  # 7,7 W/m²K con vidrio sin capa en la cara interior
+    hi = 3.6 + 4.1 * layers[-1]["eb"] / 0.837  # 7.7 W/m²K with uncoated glass on the inside face
     return 1.0 / (1.0 / 25.0 + r_glass + sum(r_gaps) + 1.0 / hi)
 
 
 def glazing_layers(construction):
-    """(capas para el cálculo, texto de composición, aviso) de una construcción de vidrio por capas."""
+    """(layers for the calculation, composition text, warning) of a layered glazing construction."""
     out, text = [], []
     for mat in construction.layers():
         g = mat.to_StandardGlazing()
@@ -329,8 +333,8 @@ def glazing_layers(construction):
             g = g.get()
             ef, eb = g.frontSideInfraredHemisphericalEmissivity(), g.backSideInfraredHemisphericalEmissivity()
             out.append(dict(kind="glass", t=g.thickness(), k=g.thermalConductivity(), ef=ef, eb=eb))
-            coat = f" (ε {min(ef, eb):.2f})".replace(".", ",") if min(ef, eb) < 0.5 else ""
-            text.append(f"vidrio {g.thickness() * 1000:.0f} mm{coat}")
+            coat = f" (ε {min(ef, eb):.2f})" if min(ef, eb) < 0.5 else ""
+            text.append(f"glass {g.thickness() * 1000:.0f} mm{coat}")
             continue
         g = mat.to_Gas()
         if g.is_initialized():
@@ -347,7 +351,7 @@ def glazing_layers(construction):
             else:
                 gas = gt
             out.append(dict(kind="gas", t=g.thickness(), mix=[(1.0, gas)]))
-            text.append(f"{g.thickness() * 1000:.0f} mm {GAS_ES.get(gt, gt)}")
+            text.append(f"{g.thickness() * 1000:.0f} mm {GAS_NAMES.get(gt, gt)}")
             continue
         g = mat.to_GasMixture()
         if g.is_initialized():
@@ -359,17 +363,17 @@ def glazing_layers(construction):
                 if fr > 0:
                     mix.append((fr, gt))
             out.append(dict(kind="gas", t=g.thickness(), mix=mix))
-            desc = " + ".join(f"{fr * 100:.0f}% {GAS_ES.get(gt, gt)}" for fr, gt in mix)
+            desc = " + ".join(f"{fr * 100:.0f}% {GAS_NAMES.get(gt, gt)}" for fr, gt in mix)
             text.append(f"{g.thickness() * 1000:.0f} mm ({desc})")
             continue
         return None, " / ".join(text + [mat.nameString()]), (
-            f"capa «{mat.nameString()}» ({mat.iddObjectType().valueName().replace('OS_', '')}) no admitida: "
-            "dispositivos de sombra, vidrios termocrómicos o de otro tipo")
+            f"layer '{mat.nameString()}' ({mat.iddObjectType().valueName().replace('OS_', '')}) not supported: "
+            "shading devices, thermochromic or other glazing types")
     return out, " / ".join(text), ""
 
 
 # ---------------------------------------------------------------------------
-# Recorrido del modelo
+# Model traversal
 # ---------------------------------------------------------------------------
 
 
@@ -383,7 +387,7 @@ def _deg(rad):
 
 
 def collect(model, include_interior=True):
-    """Datos de los cerramientos opacos y de los huecos con su construcción aplicada."""
+    """Data of the opaque elements and of the fenestration, with their applied construction."""
     opaque, glazing, details, issues = {}, {}, {}, []
 
     def add_opaque(cons, category, area, rs, films, flow, defaulted, pair=None):
@@ -415,7 +419,7 @@ def collect(model, include_interior=True):
     for s in sorted(model.getSurfaces(), key=lambda x: x.nameString()):
         oc = s.construction()
         if not oc.is_initialized():
-            issues.append(f"La superficie «{s.nameString()}» no tiene construcción.")
+            issues.append(f"Surface '{s.nameString()}' has no construction.")
             continue
         cons = oc.get()
         bc = s.outsideBoundaryCondition()
@@ -424,11 +428,10 @@ def collect(model, include_interior=True):
         area = s.netArea() * mult
         pair = None
         if bc == "Outdoors":
-            cat = {"h": "Fachada", "up": "Cubierta", "down": "Suelo en contacto con el aire exterior"}[flow]
+            cat = {"h": CAT_WALL, "up": CAT_ROOF, "down": CAT_EXP_FLOOR}[flow]
             rs = (RSI[flow], RSE_EXT)
         elif bc in GROUND_BCS:
-            cat = {"h": "Muro en contacto con el terreno", "down": "Solera / suelo en contacto con el terreno",
-                   "up": "Cubierta enterrada"}[flow]
+            cat = {"h": CAT_G_WALL, "down": CAT_G_FLOOR, "up": CAT_G_ROOF}[flow]
             rs = (RSI[flow], 0.0)
         else:  # Surface, Adiabatic, OtherSide...
             if not include_interior:
@@ -436,20 +439,20 @@ def collect(model, include_interior=True):
             adj = s.adjacentSurface()
             if adj.is_initialized():
                 if str(adj.get().handle()) < str(s.handle()):
-                    continue  # la pareja de esta partición ya se ha contado (misma área física)
+                    continue  # the other surface of this partition was already counted (same physical area)
                 ac = adj.get().construction()
                 pair = ac.get().nameString() if ac.is_initialized() else None
             if flow == "h":
-                cat, rs = "Partición interior vertical", (RSI["h"], RSI["h"])
+                cat, rs = CAT_PART_V, (RSI["h"], RSI["h"])
             else:
-                cat, rs, flow = "Partición interior horizontal", None, "both"
+                cat, rs, flow = CAT_PART_H, None, "both"
         films = ashrae_films(s.surfaceType(), bc == "Outdoors", bc in GROUND_BCS)
         add_opaque(cons, cat, area, rs, films, flow, s.isConstructionDefaulted(), pair)
 
     for ss in sorted(model.getSubSurfaces(), key=lambda x: x.nameString()):
         oc = ss.construction()
         if not oc.is_initialized():
-            issues.append(f"El hueco «{ss.nameString()}» no tiene construcción.")
+            issues.append(f"Sub-surface '{ss.nameString()}' has no construction.")
             continue
         cons = oc.get()
         parent = ss.surface()
@@ -461,7 +464,7 @@ def collect(model, include_interior=True):
         area = ss.grossArea() * mult
         st = ss.subSurfaceType()
         if cons.isFenestration():
-            cat = GLAZED_SUBSURFACES.get(st, "Ventana") if exterior else "Hueco interior"
+            cat = GLAZED_SUBSURFACES.get(st, "Window") if exterior else "Interior window"
             key = (cons.nameString(), cat)
             row = glazing.get(key)
             if row is None:
@@ -476,9 +479,9 @@ def collect(model, include_interior=True):
         else:
             flow = flow_direction(_deg(ss.tilt()))
             if exterior:
-                cat, rs = "Puerta exterior", (RSI[flow], RSE_EXT)
+                cat, rs = "Exterior door", (RSI[flow], RSE_EXT)
             else:
-                cat, rs = "Puerta interior", (RSI[flow], RSI[flow])
+                cat, rs = "Interior door", (RSI[flow], RSI[flow])
             ptype = parent.get().surfaceType() if parent.is_initialized() else "Wall"
             films = ashrae_films(ptype, exterior, bc in GROUND_BCS) if (exterior or ptype == "Wall") else \
                 2 * ASHRAE_RSI["Wall"]
@@ -487,26 +490,26 @@ def collect(model, include_interior=True):
 
 
 def construction_info(cons):
-    """Capas y resistencia de una construcción opaca (o su F/C-factor)."""
+    """Layers and resistance of an opaque construction (or its F/C-factor)."""
     ff = cons.to_FFactorGroundFloorConstruction()
     if ff.is_initialized():
         ff = ff.get()
         u_eq = ff.fFactor() * ff.perimeterExposed() / ff.area() if ff.area() > 0 else None
         return dict(kind="ffactor", layers=[], R=0.0, thickness=None, U_eq=u_eq,
-                    note=f"F-factor {ff.fFactor():.3f} W/m·K; U equivalente = F·P/A "
-                         f"(P = {ff.perimeterExposed():.1f} m, A = {ff.area():.1f} m²), incluye el terreno")
+                    note=f"F-factor {ff.fFactor():.3f} W/m·K; equivalent U = F·P/A "
+                         f"(P = {ff.perimeterExposed():.1f} m, A = {ff.area():.1f} m²), ground included")
     cf = cons.to_CFactorUndergroundWallConstruction()
     if cf.is_initialized():
         cf = cf.get()
         return dict(kind="cfactor", layers=[], R=1.0 / cf.cFactor(), thickness=None, U_eq=None,
-                    note=f"C-factor {cf.cFactor():.3f} W/m²K (sin películas ni terreno), altura {cf.height():.2f} m")
+                    note=f"C-factor {cf.cFactor():.3f} W/m²K (no air films or soil), height {cf.height():.2f} m")
     if cons.to_ConstructionAirBoundary().is_initialized():
         return dict(kind="other", layers=[], R=None, thickness=None, U_eq=None,
-                    note="límite de aire (Construction:AirBoundary): separa zonas sin cerramiento físico")
+                    note="air boundary (Construction:AirBoundary): separates zones without a physical element")
     lc = cons.to_LayeredConstruction()
     if not lc.is_initialized():
         return dict(kind="other", layers=[], R=None, thickness=None, U_eq=None,
-                    note=f"tipo de construcción no calculable ({cons.iddObjectType().valueName().replace('OS_', '')})")
+                    note=f"construction type not computable ({cons.iddObjectType().valueName().replace('OS_', '')})")
     layers, unknown = [], []
     for mat in lc.get().layers():
         info = opaque_layer(mat)
@@ -516,14 +519,14 @@ def construction_info(cons):
             layers.append(info)
     if unknown:
         return dict(kind="other", layers=layers, R=None, thickness=None, U_eq=None,
-                    note="capas no admitidas: " + ", ".join(unknown))
+                    note="unsupported layers: " + ", ".join(unknown))
     thickness = sum(lay["e"] for lay in layers if lay["e"] is not None)
     return dict(kind="layers", layers=layers, R=sum(lay["R"] for lay in layers), thickness=thickness, U_eq=None,
                 note="")
 
 
 def glazing_info(cons):
-    """U del vidrio (EnergyPlus / UNE-EN 673), g y Tv de una construcción de hueco."""
+    """Glass U-value (EnergyPlus / EN 673), SHGC and visible transmittance of a fenestration construction."""
     lc = cons.to_LayeredConstruction()
     layers = list(lc.get().layers()) if lc.is_initialized() else []
     if len(layers) == 1 and layers[0].to_SimpleGlazing().is_initialized():
@@ -531,24 +534,24 @@ def glazing_info(cons):
         vt = sg.visibleTransmittance()
         return dict(kind="Simple Glazing System", U_ep=sg.uFactor(), Ug=None, g=sg.solarHeatGainCoefficient(),
                     vt=vt.get() if vt.is_initialized() else None,
-                    comp=f"U {sg.uFactor():.2f}, SHGC {sg.solarHeatGainCoefficient():.2f}".replace(".", ","),
-                    note="valores introducidos en el objeto (si se definieron así, son los del hueco completo)")
+                    comp=f"U {sg.uFactor():.2f}, SHGC {sg.solarHeatGainCoefficient():.2f}",
+                    note="values entered in the object (if defined that way, they are whole-window values)")
     if not lc.is_initialized():
-        return dict(kind="No calculable", U_ep=None, Ug=None, g=None, vt=None, comp="",
-                    note=f"tipo {cons.iddObjectType().valueName().replace('OS_', '')}")
+        return dict(kind="Not computable", U_ep=None, Ug=None, g=None, vt=None, comp="",
+                    note=f"type {cons.iddObjectType().valueName().replace('OS_', '')}")
     calc, comp, note = glazing_layers(lc.get())
     if calc is None:
-        return dict(kind="No calculable", U_ep=None, Ug=None, g=None, vt=None, comp=comp, note=note)
+        return dict(kind="Not computable", U_ep=None, Ug=None, g=None, vt=None, comp=comp, note=note)
     if any(lay["kind"] == "gas" for i, lay in enumerate(calc) if i in (0, len(calc) - 1)) or \
             any(a["kind"] == b["kind"] for a, b in zip(calc, calc[1:])):
-        return dict(kind="No calculable", U_ep=None, Ug=None, g=None, vt=None, comp=comp,
-                    note="la composición debe alternar vidrio y cámara, con vidrio en ambas caras")
-    return dict(kind="Por capas", U_ep=u_glass_15099(calc), Ug=ug_en673(calc), g=None, vt=None, comp=comp,
+        return dict(kind="Not computable", U_ep=None, Ug=None, g=None, vt=None, comp=comp,
+                    note="the layers must alternate glass and gas, with glass on both faces")
+    return dict(kind="Layered", U_ep=u_glass_15099(calc), Ug=ug_en673(calc), g=None, vt=None, comp=comp,
                 note="")
 
 
 # ---------------------------------------------------------------------------
-# Informe HTML
+# HTML report
 # ---------------------------------------------------------------------------
 
 
@@ -557,7 +560,7 @@ def _f(v, d=2):
         return "—"
     if isinstance(v, tuple):
         return " / ".join(_f(x, d) for x in v)
-    return f"{v:,.{d}f}".replace(",", " ").replace(".", ",").replace(" ", ".")
+    return f"{v:,.{d}f}"
 
 
 def _e(s):
@@ -565,11 +568,11 @@ def _e(s):
 
 
 def origin_text(row):
-    """Origen de la construcción: conjunto de construcciones (por defecto) o asignada a la superficie."""
+    """Origin of the construction: construction set (default) or assigned to the surface."""
     a, b = row.get("n_set", 0), row.get("n_hand", 0)
     if a and b:
-        return f"Conjunto ({a}) y asignada ({b})"
-    return "Conjunto" if a else "Asignada"
+        return f"Set ({a}) and assigned ({b})"
+    return "Construction set" if a else "Assigned"
 
 
 def _cat_key(row):
@@ -578,7 +581,7 @@ def _cat_key(row):
 
 
 def summary_rows(opaque, glazing):
-    """Por categoría: nº de construcciones, área y U media ponderada por área."""
+    """By category: number of constructions, area and area-weighted U-value."""
     out = {}
     for row in list(opaque.values()) + list(glazing.values()):
         u = row.get("U") if "U" in row else row.get("U_ep")
@@ -594,7 +597,7 @@ def summary_rows(opaque, glazing):
     for acc in out.values():
         if acc["aw"] > 0:
             a, b = acc["ua"][0] / acc["aw"], acc["ua"][1] / acc["aw"]
-            acc["U"] = (a, b) if acc["cat"] == "Partición interior horizontal" else a
+            acc["U"] = (a, b) if acc["cat"] == CAT_PART_H else a
         else:
             acc["U"] = None
         res.append(acc)
@@ -628,14 +631,17 @@ ul { margin: 6px 0; padding-left: 20px; }
 @media print { .bar { display: none; } details { break-inside: avoid; } }
 """
 
+# CSV: comma + decimal point (international) or semicolon + decimal comma (Excel with a European locale)
 JS = """
-function csv(){
-  const d = JSON.parse(document.getElementById('datos').textContent);
+function csv(sep, dec){
+  const d = JSON.parse(document.getElementById('report-data').textContent);
   const rows = [d.head].concat(d.rows);
+  const num = /^-?[0-9.]+( \\/ -?[0-9.]+)*$/;
   const txt = rows.map(r => r.map(v => {
       if (v === null || v === undefined) return '';
-      if (typeof v === 'number') return String(v).replace('.', ',');
-      const s = String(v); return /[;"\\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(';')).join('\\r\\n');
+      let s = String(v);
+      if ((typeof v === 'number' || num.test(s)) && dec !== '.') s = s.split('.').join(dec);
+      return (s.includes(sep) || /["\\n]/.test(s)) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(sep)).join('\\r\\n');
   const blob = new Blob(['\\ufeff' + txt], {type: 'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = d.file; a.click();
 }
@@ -647,10 +653,9 @@ def build_html(title, opaque, glazing, details, issues, meta):
     glz = sorted(glazing.values(), key=_cat_key)
     summ = summary_rows(opaque, glazing)
 
-    ground_cats = ("Muro en contacto con el terreno", "Solera / suelo en contacto con el terreno", "Cubierta enterrada")
     srows = "".join(
         f"<tr><td>{_e(r['cat'])}</td><td>{r['n']}</td><td>{_f(r['area'], 1)}</td><td class='u'>{_f(r['U'], 2)}"
-        f"{'†' if r['cat'] in ground_cats and r['U'] is not None else ''}</td></tr>" for r in summ)
+        f"{'†' if r['cat'] in GROUND_CATS and r['U'] is not None else ''}</td></tr>" for r in summ)
 
     body, last = [], None
     for r in opq:
@@ -664,21 +669,20 @@ def build_html(title, opaque, glazing, details, issues, meta):
             rs_txt = f"{_f(r['rsi'][0])} + {_f(r['rse'][0])} / {_f(r['rsi'][1])} + {_f(r['rse'][1])}"
         else:
             rs_txt = f"{_f(r['rsi'])} + {_f(r['rse'])}"
-        mark = "†" if r["cat"] in ("Muro en contacto con el terreno", "Solera / suelo en contacto con el terreno",
-                                    "Cubierta enterrada") and r["kind"] == "layers" else ""
+        mark = "†" if r["cat"] in GROUND_CATS and r["kind"] == "layers" else ""
         notes = [r["note"]] if r.get("note") else []
         if r.get("pairs"):
-            notes.append("desde la zona contigua: " + ", ".join(f"«{p}»" for p in sorted(r["pairs"])))
+            notes.append("from the adjacent zone: " + ", ".join(f"'{p}'" for p in sorted(r["pairs"])))
         note = "".join(f"<div class='note'>{_e(n)}</div>" for n in notes)
         body.append(
             f"<tr><td class='l'>{_e(r['cons'])}{note}</td><td class='l'>{_e(origin_text(r))}</td><td>{r['n']}</td>"
             f"<td>{_f(r['area'], 1)}</td><td>{_f(r['thickness'], 3)}</td><td>{_f(r['R'], 3) if r['kind'] == 'layers' else '—'}</td>"
             f"<td>{rs_txt}</td><td class='u'>{_f(r.get('U'), 3)}{mark}</td><td>{_f(ashrae, 3)}</td></tr>")
-    otable = ("<div class='scroll'><table><thead><tr><th class='l'>Construcción</th><th class='l'>Origen</th>"
-              "<th>Nº sup.</th>"
-              "<th>Área [m²]</th><th>Espesor [m]</th><th>R capas [m²K/W]</th><th>Rsi + Rse [m²K/W]</th>"
-              "<th>U CTE / ISO 6946 [W/m²K]</th><th>U películas ASHRAE<br>(OpenStudio / EnergyPlus)</th></tr></thead>"
-              f"<tbody>{''.join(body)}</tbody></table></div>") if opq else "<p>No hay cerramientos opacos.</p>"
+    otable = ("<div class='scroll'><table><thead><tr><th class='l'>Construction</th><th class='l'>Origin</th>"
+              "<th>No. of surfaces</th>"
+              "<th>Area [m²]</th><th>Thickness [m]</th><th>Layers R [m²K/W]</th><th>Rsi + Rse [m²K/W]</th>"
+              "<th>U ISO 6946 [W/m²K]</th><th>U with ASHRAE films<br>(OpenStudio / EnergyPlus)</th></tr></thead>"
+              f"<tbody>{''.join(body)}</tbody></table></div>") if opq else "<p>No opaque elements.</p>"
 
     gbody, last = [], None
     for r in glz:
@@ -687,17 +691,18 @@ def build_html(title, opaque, glazing, details, issues, meta):
             last = r["cat"]
         notes = [r["note"]] if r.get("note") else []
         if r["frames"]:
-            notes.append(f"{r['frames']} de {r['n']} huecos tienen marco (no incluido en la U)")
+            notes.append(f"{r['frames']} of {r['n']} windows have a frame (not included in the U-value)")
         note = "".join(f"<div class='note'>{_e(n)}</div>" for n in notes)
         gbody.append(
             f"<tr><td class='l'>{_e(r['cons'])}{note}</td><td class='l'>{_e(r['comp'])}</td>"
             f"<td class='l'>{_e(origin_text(r))}</td><td>{r['n']}</td>"
             f"<td>{_f(r['area'], 1)}</td><td class='u'>{_f(r['U_ep'], 3)}</td><td>{_f(r['Ug'], 2)}</td>"
             f"<td>{_f(r['g'], 2)}</td><td>{_f(r['vt'], 2)}</td></tr>")
-    gtable = ("<div class='scroll'><table><thead><tr><th class='l'>Construcción</th><th class='l'>Composición "
-              "(exterior → interior)</th><th class='l'>Origen</th><th>Nº huecos</th><th>Área [m²]</th><th>U vidrio EnergyPlus<br>"
-              "(ISO 15099, NFRC) [W/m²K]</th><th>Ug UNE-EN 673<br>[W/m²K]</th><th>g (SHGC)</th><th>Tv</th></tr></thead>"
-              f"<tbody>{''.join(gbody)}</tbody></table></div>") if glz else "<p>No hay huecos acristalados.</p>"
+    gtable = ("<div class='scroll'><table><thead><tr><th class='l'>Construction</th><th class='l'>Composition "
+              "(outside → inside)</th><th class='l'>Origin</th><th>No. of windows</th><th>Area [m²]</th>"
+              "<th>Glass U EnergyPlus<br>(ISO 15099, NFRC) [W/m²K]</th><th>Ug EN 673<br>[W/m²K]</th><th>SHGC</th>"
+              "<th>Tvis</th></tr></thead>"
+              f"<tbody>{''.join(gbody)}</tbody></table></div>") if glz else "<p>No glazed openings.</p>"
 
     det = []
     for name in sorted(details, key=str.lower):
@@ -708,21 +713,21 @@ def build_html(title, opaque, glazing, details, issues, meta):
             f"<tr><td class='l'>{i}</td><td class='l'>{_e(lay['name'])}</td><td class='l'>{_e(lay['kind'])}</td>"
             f"<td>{_f(lay['e'], 3)}</td><td>{_f(lay['lam'], 3)}</td><td>{_f(lay['R'], 3)}</td></tr>"
             for i, lay in enumerate(info["layers"], 1))
-        det.append(f"<details><summary>{_e(name)} — R capas = {_f(info['R'], 3)} m²K/W</summary>"
+        det.append(f"<details><summary>{_e(name)} — layers R = {_f(info['R'], 3)} m²K/W</summary>"
                    "<div class='scroll'><table><thead><tr><th class='l'>#</th><th class='l'>Material</th>"
-                   "<th class='l'>Tipo</th><th>e [m]</th><th>λ [W/m·K]</th><th>R [m²K/W]</th></tr></thead>"
+                   "<th class='l'>Type</th><th>e [m]</th><th>λ [W/m·K]</th><th>R [m²K/W]</th></tr></thead>"
                    f"<tbody>{rows}</tbody></table></div></details>")
 
-    csv_head = ["Tipo", "Construcción", "Composición", "Origen", "Nº", "Área [m2]", "Espesor [m]", "R capas [m2K/W]",
-                "U CTE/ISO 6946 [W/m2K]", "U ASHRAE [W/m2K]", "U vidrio EnergyPlus [W/m2K]", "Ug EN 673 [W/m2K]",
-                "g", "Tv"]
+    csv_head = ["Type", "Construction", "Composition", "Origin", "Count", "Area [m2]", "Thickness [m]",
+                "Layers R [m2K/W]", "U ISO 6946 [W/m2K]", "U ASHRAE [W/m2K]", "Glass U EnergyPlus [W/m2K]",
+                "Ug EN 673 [W/m2K]", "SHGC", "Tvis"]
     csv_rows = []
     for r in opq:
         u = r.get("U")
         csv_rows.append([r["cat"], r["cons"], "", origin_text(r), r["n"], round(r["area"], 2),
                          None if r["thickness"] is None else round(r["thickness"], 4),
                          round(r["R"], 4) if r["kind"] == "layers" else None,
-                         None if u is None else (" / ".join(f"{x:.3f}".replace(".", ",") for x in u)
+                         None if u is None else (" / ".join(f"{x:.3f}" for x in u)
                                                  if isinstance(u, tuple) else round(u, 4)),
                          round(r["ashrae_ua"] / r["ashrae_a"], 4) if r["ashrae_a"] > 0 else None,
                          None, None, None, None])
@@ -735,49 +740,53 @@ def build_html(title, opaque, glazing, details, issues, meta):
     data = json.dumps(dict(head=csv_head, rows=csv_rows, file=meta["csv_name"]), ensure_ascii=False)
     data = data.replace("</", "<\\/")
 
-    issues_html = ("<h2>Avisos</h2><ul>" + "".join(f"<li class='warn'>{_e(i)}</li>" for i in issues) + "</ul>") \
+    issues_html = ("<h2>Warnings</h2><ul>" + "".join(f"<li class='warn'>{_e(i)}</li>" for i in issues) + "</ul>") \
         if issues else ""
 
     return f"""<!DOCTYPE html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{_e(title)}</title><style>{CSS}</style></head>
 <body><main>
-<h1>Transmitancias térmicas del modelo</h1>
+<h1>Thermal transmittance of the model</h1>
 <p class="sub">{_e(meta['building'])} · {_e(meta['date'])} · OpenStudio {_e(meta['os'])} (EnergyPlus {_e(meta['ep'])})</p>
-<div class="bar"><button onclick="csv()">Descargar CSV</button><button onclick="window.print()">Imprimir / PDF</button></div>
-<p class="note">Solo las construcciones aplicadas a alguna superficie o hueco del modelo: la asignada a la superficie si la
-tiene y, si no, la que le corresponde por su conjunto de construcciones (columna «Origen»). Áreas netas de huecos y
-multiplicadas por el multiplicador de la zona.</p>
-<h2>Resumen por tipo de cerramiento</h2>
-<div class="scroll"><table><thead><tr><th class="l">Tipo</th><th>Nº construcciones</th><th>Área [m²]</th>
-<th>U media ponderada [W/m²K]</th></tr></thead><tbody>{srows}</tbody></table></div>
-<p class="note">Media ponderada por área: opacos con la U del CTE / ISO 6946; huecos con la U de EnergyPlus. Sin puentes
-térmicos ni marcos. En particiones horizontales: flujo ascendente / descendente. † Sin el terreno (ver nota de la tabla
-de opacos).</p>
-<h2>Cerramientos opacos</h2>
+<div class="bar"><button onclick="csv(',', '.')">Download CSV</button>
+<button onclick="csv(';', ',')">Download CSV (; and decimal comma)</button>
+<button onclick="window.print()">Print / PDF</button></div>
+<p class="note">Only the constructions applied to some surface or sub-surface of the model: the one assigned to the surface
+if any, otherwise the one it receives from its construction set ("Origin" column). Areas net of openings and multiplied
+by the zone multiplier.</p>
+<h2>Summary by element type</h2>
+<div class="scroll"><table><thead><tr><th class="l">Type</th><th>No. of constructions</th><th>Area [m²]</th>
+<th>Area-weighted U [W/m²K]</th></tr></thead><tbody>{srows}</tbody></table></div>
+<p class="note">Area-weighted average: opaque elements with the ISO 6946 U-value; glazing with the EnergyPlus U-value. No
+thermal bridges or frames. Horizontal partitions: upward / downward heat flow. † Without the ground (see the note of the
+opaque table).</p>
+<h2>Opaque elements</h2>
 {otable}
-<p class="note">U CTE / ISO 6946 = 1 / (Rsi + Σ e/λ + Rse) con las resistencias superficiales de UNE-EN ISO 6946 (DA DB-HE/1):
-flujo horizontal 0,13 / 0,04; ascendente 0,10 / 0,04; descendente 0,17 / 0,04 (interior / exterior); en particiones
-interiores, Rsi a ambos lados. † En contacto con el terreno: U de la construcción con Rsi y sin terreno (el CTE calcula
-la Us de soleras y muros enterrados con el terreno, según su geometría y aislamiento). La U con películas ASHRAE es la que
-calcula OpenStudio y la que publica el informe de EnergyPlus (Envelope Summary); EnergyPlus no usa ninguna de las dos en la
-simulación, porque calcula la convección y la radiación de cada superficie en cada paso de tiempo.</p>
-<h2>Huecos acristalados</h2>
+<p class="note">U ISO 6946 = 1 / (Rsi + Σ e/λ + Rse) with the surface resistances of EN ISO 6946 (the same values as the
+Spanish CTE, DA DB-HE/1): horizontal heat flow 0.13 / 0.04; upward 0.10 / 0.04; downward 0.17 / 0.04 (inside / outside);
+for interior partitions, Rsi on both sides. † In contact with the ground: U-value of the construction with Rsi and
+without the ground (national methods such as ISO 13370 or the CTE compute the U-value of slabs and basement walls with
+the ground, according to their geometry and insulation). The U-value with ASHRAE films is the one computed by OpenStudio
+and published in the EnergyPlus report (Envelope Summary); EnergyPlus uses neither of them in the simulation, because
+it computes the convection and radiation of each surface at every time step.</p>
+<h2>Glazed openings</h2>
 {gtable}
-<p class="note">Simple Glazing System: U, g y Tv del propio objeto. Vidrios por capas: U del centro del vidrio, sin marco.
-EnergyPlus la calcula con ISO 15099 en condiciones de invierno NFRC (21 ºC interior, −18 ºC exterior, convección exterior
-26 W/m²K): es la «Glass U-Factor» de su informe. La Ug de UNE-EN 673 (ΔT = 15 K, Tm = 10 ºC, he = 25 W/m²K) es la que
-declaran los fabricantes y la que pide el CTE; se publica redondeada a una décima.</p>
+<p class="note">Simple Glazing System: U-factor, SHGC and visible transmittance of the object itself. Layered glazing:
+centre-of-glass U-value, without frame. EnergyPlus computes it with ISO 15099 under NFRC winter conditions (21 °C inside,
+−18 °C outside, outside convection 26 W/m²K): it is the "Glass U-Factor" of its report. The Ug of EN 673 (ΔT = 15 K,
+Tm = 10 °C, he = 25 W/m²K) is the value declared by glass manufacturers and required by European building codes; it is
+published rounded to one decimal place.</p>
 {issues_html}
-<h2>Composición de los cerramientos opacos</h2>
+<h2>Composition of the opaque elements</h2>
 {''.join(det) if det else '<p>—</p>'}
-<script type="application/json" id="datos">{data}</script>
+<script type="application/json" id="report-data">{data}</script>
 <script>{JS}</script>
 </main></body></html>"""
 
 
 def _safe(text):
-    return re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")[:40] or "modelo"
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", text).strip("_")[:40] or "model"
 
 
 # ---------------------------------------------------------------------------
@@ -786,7 +795,7 @@ def _safe(text):
 
 
 class TransmittanceInfo(openstudio.measure.ModelMeasure):
-    """Transmitancias de los cerramientos y huecos aplicados en el modelo."""
+    """U-values of the constructions and glazing applied in the model."""
 
     def name(self):
         """Returns the human readable name."""
@@ -795,43 +804,43 @@ class TransmittanceInfo(openstudio.measure.ModelMeasure):
     def description(self):
         """Human readable description."""
         return (
-            "Calcula, sin simular, la transmitancia térmica U de los cerramientos opacos y de los vidrios que están "
-            "aplicados en el modelo y abre un informe en el navegador. Úsela con «Apply Measure Now» (menú Components & "
-            "Measures). No modifica el modelo."
+            "Computes, without simulating, the thermal transmittance (U-value) of the opaque constructions and glazing "
+            "applied in the model and opens a report in the web browser. Use it with 'Apply Measure Now' (Components & "
+            "Measures menu). It does not modify the model."
         )
 
     def modeler_description(self):
         """Human readable description of modeling approach."""
         return (
-            "Recorre Surfaces y SubSurfaces y toma su construcción efectiva (incluidas las de los Default Construction "
-            "Sets). Opacos: U = 1/(Rsi + Σe/λ + Rse) con Rsi/Rse de UNE-EN ISO 6946 / DA DB-HE/1 según la inclinación "
-            "(flujo horizontal si 60º ≤ inclinación ≤ 120º) y la condición de contorno (terreno: Rse = 0, sin terreno; "
-            "particiones: Rsi a ambos lados); también la U con películas ASHRAE de PlanarSurface::uFactor(). F/C-factor: "
-            "U equivalente F·P/A y C. Huecos: SimpleGlazing con sus valores; vidrios por capas con la U del centro del "
-            "vidrio de ISO 15099 en condiciones NFRC de invierno (21/−18 ºC, hc,e = 26 W/m²K, convección interior "
-            "ISO 15099 con altura 1 m, gases y mezclas con los coeficientes de EnergyPlus) y la Ug de UNE-EN 673. Áreas "
-            "netas × multiplicador de zona; las particiones emparejadas con la misma construcción se cuentan una vez. "
-            "El informe HTML se guarda en la carpeta indicada (o en la temporal del sistema) y se abre con el navegador "
-            "predeterminado."
+            "Goes through Surfaces and SubSurfaces and takes their effective construction (including those from Default "
+            "Construction Sets). Opaque: U = 1/(Rsi + Σe/λ + Rse) with Rsi/Rse from EN ISO 6946 / CTE DA DB-HE/1 "
+            "according to the tilt (horizontal flow if 60° ≤ tilt ≤ 120°) and the boundary condition (ground: Rse = 0, "
+            "ground not included; partitions: Rsi on both sides); also the U-value with the ASHRAE films of the "
+            "EnergyPlus Envelope Summary. F/C-factor: equivalent U = F·P/A and C. Glazing: SimpleGlazing with its own "
+            "values; layered glazing with the ISO 15099 centre-of-glass U-value under NFRC winter conditions "
+            "(21/−18 °C, hc,out = 26 W/m²K, ISO 15099 inside convection with a 1 m height, gases and mixtures with the "
+            "EnergyPlus coefficients) and the EN 673 Ug. Net areas × zone multiplier; paired partitions are counted "
+            "once. The HTML report is saved in the chosen folder (or in the system temporary folder) and opened with "
+            "the default web browser."
         )
 
     def arguments(self, model: typing.Optional[openstudio.model.Model] = None):
         """Prepares user arguments for the measure."""
         args = openstudio.measure.OSArgumentVector()
 
-        a = openstudio.measure.OSArgument.makeBoolArgument("abrir_navegador", True)
-        a.setDisplayName("Abrir el informe en el navegador al terminar")
+        a = openstudio.measure.OSArgument.makeBoolArgument("open_browser", True)
+        a.setDisplayName("Open the report in the web browser when finished")
         a.setDefaultValue(True)
         args.append(a)
 
-        a = openstudio.measure.OSArgument.makeStringArgument("carpeta_salida", False)
-        a.setDisplayName("Carpeta donde guardar el informe (vacío = carpeta temporal del sistema)")
-        a.setDescription("Por ejemplo C:\\Users\\nombre\\Documents. La ruta del informe aparece en los mensajes.")
+        a = openstudio.measure.OSArgument.makeStringArgument("output_folder", False)
+        a.setDisplayName("Folder where the report is saved (empty = system temporary folder)")
+        a.setDescription("For example C:\\Users\\name\\Documents. The report path is shown in the measure messages.")
         a.setDefaultValue("")
         args.append(a)
 
-        a = openstudio.measure.OSArgument.makeBoolArgument("incluir_interiores", True)
-        a.setDisplayName("Incluir particiones y huecos interiores")
+        a = openstudio.measure.OSArgument.makeBoolArgument("include_interior", True)
+        a.setDisplayName("Include interior partitions, doors and windows")
         a.setDefaultValue(True)
         args.append(a)
 
@@ -849,46 +858,46 @@ class TransmittanceInfo(openstudio.measure.ModelMeasure):
         if not (runner.validateUserArguments(self.arguments(model), user_arguments)):
             return False
 
-        open_browser = runner.getBoolArgumentValue("abrir_navegador", user_arguments)
-        folder = runner.getStringArgumentValue("carpeta_salida", user_arguments).strip().strip('"')
-        interior = runner.getBoolArgumentValue("incluir_interiores", user_arguments)
+        open_browser = runner.getBoolArgumentValue("open_browser", user_arguments)
+        folder = runner.getStringArgumentValue("output_folder", user_arguments).strip().strip('"')
+        interior = runner.getBoolArgumentValue("include_interior", user_arguments)
 
         opaque, glazing, details, issues = collect(model, include_interior=interior)
         n_cons = len({r["cons"] for r in opaque.values()} | {r["cons"] for r in glazing.values()})
-        runner.registerInitialCondition(f"El modelo tiene {n_cons} construcciones aplicadas a superficies o huecos.")
+        runner.registerInitialCondition(f"The model has {n_cons} constructions applied to surfaces or sub-surfaces.")
         if not opaque and not glazing:
-            runner.registerAsNotApplicable("El modelo no tiene superficies con construcción.")
+            runner.registerAsNotApplicable("The model has no surfaces with a construction.")
             return True
         for i in issues:
             runner.registerWarning(i)
 
-        # resumen en los mensajes (por si no se abre el navegador)
+        # summary in the messages (in case the browser does not open)
         for r in sorted(opaque.values(), key=_cat_key):
             u = r.get("U")
-            utxt = "no calculable" if u is None else (
+            utxt = "not computable" if u is None else (
                 f"U↑ {u[0]:.3f} / U↓ {u[1]:.3f}" if isinstance(u, tuple) else f"U = {u:.3f}")
             runner.registerInfo(f"{r['cat']} | {r['cons']}: {utxt} W/m²K ({r['area']:.1f} m²)")
         for r in sorted(glazing.values(), key=_cat_key):
-            utxt = "no calculable" if r["U_ep"] is None else f"U = {r['U_ep']:.3f}"
+            utxt = "not computable" if r["U_ep"] is None else f"U = {r['U_ep']:.3f}"
             ug = "" if r["Ug"] is None else f", Ug EN 673 = {r['Ug']:.2f}"
             runner.registerInfo(f"{r['cat']} | {r['cons']}: {utxt}{ug} W/m²K ({r['area']:.1f} m²)")
 
-        b = model.building()  # sin crear el objeto Building si no existe (no se modifica el modelo)
-        building = b.get().nameString() if b.is_initialized() else "Modelo"
+        b = model.building()  # without creating the Building object if it does not exist (the model is not modified)
+        building = b.get().nameString() if b.is_initialized() else "Model"
         now = datetime.datetime.now()
         stamp = now.strftime("%Y%m%d_%H%M%S")
-        meta = dict(building=building, date=now.strftime("%d/%m/%Y %H:%M"), os=openstudio.openStudioVersion(),
-                    ep=openstudio.energyPlusVersion(), csv_name=f"transmitancias_{_safe(building)}_{stamp}.csv")
-        page = build_html(f"Transmitancias · {building}", opaque, glazing, details, issues, meta)
+        meta = dict(building=building, date=now.strftime("%Y-%m-%d %H:%M"), os=openstudio.openStudioVersion(),
+                    ep=openstudio.energyPlusVersion(), csv_name=f"u_values_{_safe(building)}_{stamp}.csv")
+        page = build_html(f"U-values · {building}", opaque, glazing, details, issues, meta)
 
-        # informe: carpeta elegida (o temporal) + report.html en la carpeta de ejecución de la measure
+        # report: chosen (or temporary) folder + report.html in the measure run folder
         try:
-            out_dir = Path(folder) if folder else Path(tempfile.gettempdir()) / "OpenStudio_transmitancias"
+            out_dir = Path(folder) if folder else Path(tempfile.gettempdir()) / "OpenStudio_U_values"
             out_dir.mkdir(parents=True, exist_ok=True)
-            path = out_dir / f"transmitancias_{_safe(building)}_{stamp}.html"
+            path = out_dir / f"u_values_{_safe(building)}_{stamp}.html"
             path.write_text(page, encoding="utf-8")
         except OSError as e:
-            runner.registerError(f"No se pudo guardar el informe en «{folder or tempfile.gettempdir()}»: {e}")
+            runner.registerError(f"The report could not be saved in '{folder or tempfile.gettempdir()}': {e}")
             return False
         try:
             Path("report.html").write_text(page, encoding="utf-8")
@@ -899,12 +908,12 @@ class TransmittanceInfo(openstudio.measure.ModelMeasure):
         if open_browser:
             try:
                 opened = webbrowser.open(path.resolve().as_uri())
-            except Exception:  # noqa: BLE001 - sin navegador disponible
+            except Exception:  # noqa: BLE001 - no browser available
                 opened = False
-        runner.registerInfo(f"Informe: {path}")
+        runner.registerInfo(f"Report: {path}")
         if open_browser and not opened:
-            runner.registerWarning(f"No se pudo abrir el navegador. Abra el informe a mano: {path}")
-        runner.registerFinalCondition(f"Informe de transmitancias guardado en {path}. El modelo no se ha modificado.")
+            runner.registerWarning(f"The web browser could not be opened. Open the report manually: {path}")
+        runner.registerFinalCondition(f"U-value report saved in {path}. The model has not been modified.")
         return True
 
 
