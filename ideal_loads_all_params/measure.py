@@ -1,4 +1,4 @@
-"""insert your copyright here.
+"""Copyright 2026 Germán Ramos Ruiz y SPDX-License-Identifier: Apache-2.0.
 
 Measure de EnergyPlus (Python) para OpenStudio 3.11.
 
